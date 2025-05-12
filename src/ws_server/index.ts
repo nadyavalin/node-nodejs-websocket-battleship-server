@@ -9,11 +9,7 @@ export function startWebSocketServer(port: number) {
   });
 
   wss.on('connection', (ws: WebSocket) => {
-    logger.log(
-      'connection',
-      { event: 'Client connected' },
-      { status: 'success' }
-    );
+    logger.log('connection', { event: 'Client connected' }, { status: 'success' });
 
     ws.on('message', (message: string) => {
       try {
@@ -41,28 +37,16 @@ export function startWebSocketServer(port: number) {
     });
 
     ws.on('close', () => {
-      logger.log(
-        'connection',
-        { event: 'Client disconnected' },
-        { status: 'success' }
-      );
+      logger.log('connection', { event: 'Client disconnected' }, { status: 'success' });
     });
 
     ws.on('error', (error) => {
-      logger.log(
-        'error',
-        { event: 'WebSocket error' },
-        { error: error.message }
-      );
+      logger.log('error', { event: 'WebSocket error' }, { error: error.message });
     });
   });
 
   wss.on('close', () => {
-    logger.log(
-      'server',
-      { event: 'WebSocket server closed' },
-      { status: 'success' }
-    );
+    logger.log('server', { event: 'WebSocket server closed' }, { status: 'success' });
   });
 
   return wss;
