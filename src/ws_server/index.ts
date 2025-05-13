@@ -12,9 +12,9 @@ import {
   UpdateRoomResult,
   GenericResult,
   RoomUser,
-  StartGameResult,
   AttackData,
   AttackResult,
+  RoomInfo,
 } from '../utils/types';
 
 export function startWebSocketServer(port: number) {
@@ -25,15 +25,13 @@ export function startWebSocketServer(port: number) {
   });
 
   const broadcastWinners = () => {
-    const winners: UpdateWinnersResult['winners'] = Array.from(storage.players.values()).map(
-      (player) => ({
-        name: player.name,
-        wins: player.wins,
-      })
-    );
+    const winners: UpdateWinnersResult = Array.from(storage.players.values()).map((player) => ({
+      name: player.name,
+      wins: player.wins,
+    }));
     const response: WebSocketResponse<UpdateWinnersResult> = {
       type: 'update_winners',
-      data: { winners },
+      data: winners,
       id: 0,
     };
     wss.clients.forEach((client) => {
@@ -44,8 +42,35 @@ export function startWebSocketServer(port: number) {
     logger.log('update_winners', { event: 'update_winners' }, response);
   };
 
-  wss.on('connection', (ws: WebSocket) => {
+  const broadcastRooms = () => {
+    const rooms: RoomInfo[] = Array.from(storage.rooms.values())
+      .filter((room) => room.players.length === 1)
+      .map((room) => ({
+        roomId: room.roomId,
+        roomUsers: room.players.map(
+          (p) =>
+            ({
+              name: p.name,
+              index: p.index,
+            }) as RoomUser
+        ),
+      }));
+    const response: WebSocketResponse<UpdateRoomResult> = {
+      type: 'update_room',
+      data: { rooms },
+      id: 0,
+    };
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(response));
+      }
+    });
+    logger.log('update_room', { event: 'update_room' }, response);
+  };
+
+  wss.on('connection', (ws: WebSocket & { playerIndex: string | null }) => {
     let playerIndex: string | null = null;
+    ws.playerIndex = playerIndex;
 
     logger.log('connection', { event: 'Client connected' }, { status: 'success' });
 
@@ -88,6 +113,7 @@ export function startWebSocketServer(port: number) {
                 id: 0,
               };
               playerIndex = player.index;
+              ws.playerIndex = playerIndex;
             } else {
               response = {
                 type: 'reg',
@@ -120,6 +146,7 @@ export function startWebSocketServer(port: number) {
               id: 0,
             };
             playerIndex = index;
+            ws.playerIndex = playerIndex;
           }
 
           ws.send(JSON.stringify(response));
@@ -194,6 +221,7 @@ export function startWebSocketServer(port: number) {
           };
 
           ws.send(JSON.stringify(response));
+          broadcastRooms();
           logger.log('create_room', data, response);
           return;
         }
@@ -274,13 +302,18 @@ export function startWebSocketServer(port: number) {
           const response: WebSocketResponse<UpdateRoomResult> = {
             type: 'update_room',
             data: {
-              room: room.players.map(
-                (p: { name: string; index: string }) =>
-                  ({
-                    name: p.name,
-                    index: p.index,
-                  }) as RoomUser
-              ),
+              rooms: Array.from(storage.rooms.values())
+                .filter((room) => room.players.length === 1)
+                .map((room) => ({
+                  roomId: room.roomId,
+                  roomUsers: room.players.map(
+                    (p) =>
+                      ({
+                        name: p.name,
+                        index: p.index,
+                      }) as RoomUser
+                  ),
+                })),
             },
             id: 0,
           };
@@ -293,6 +326,22 @@ export function startWebSocketServer(port: number) {
             },
             id: 0,
           };
+
+          const creatorWs = Array.from(
+            wss.clients as Set<WebSocket & { playerIndex: string | null }>
+          ).find((client) => room.players.some((p) => p.index === client.playerIndex));
+          if (creatorWs && creatorWs.readyState === WebSocket.OPEN) {
+            creatorWs.send(
+              JSON.stringify({
+                type: 'create_game',
+                data: {
+                  idGame: game!.gameId,
+                  idPlayer: room.players[0].index,
+                },
+                id: 0,
+              })
+            );
+          }
           ws.send(JSON.stringify(createGameResponse));
 
           wss.clients.forEach((client) => {
@@ -303,23 +352,9 @@ export function startWebSocketServer(port: number) {
 
           logger.log('add_user_to_room', data, response);
 
-          // TODO: Отложить до получения позиций кораблей
           if (room.players.length === 2) {
-            const startGameResponse: WebSocketResponse<StartGameResult> = {
-              type: 'start_game',
-              data: {
-                ships: [],
-                currentPlayerIndex: game!.players[0].index,
-              },
-              id: 0,
-            };
-            wss.clients.forEach((client) => {
-              if (client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify(startGameResponse));
-              }
-            });
-            logger.log('start_game', { event: 'start_game' }, startGameResponse);
             storage.rooms.delete(data.indexRoom);
+            broadcastRooms();
           }
 
           return;

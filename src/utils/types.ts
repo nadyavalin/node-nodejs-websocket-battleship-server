@@ -16,20 +16,18 @@ export interface WebSocketResponse<T> {
   id: number;
 }
 
-export type CreateRoomData = object;
-
-export interface CreateGameResult {
-  idGame: string;
-  idPlayer: string;
-}
-
 export interface Winner {
   name: string;
   wins: number;
 }
 
-export interface UpdateWinnersResult {
-  winners: Winner[];
+export type UpdateWinnersResult = Winner[];
+
+export type CreateRoomData = object;
+
+export interface CreateGameResult {
+  idGame: string;
+  idPlayer: string;
 }
 
 export interface AddUserToRoomData {
@@ -47,7 +45,7 @@ export interface RoomInfo {
 }
 
 export interface UpdateRoomResult {
-  room: RoomUser[];
+  rooms: RoomInfo[];
 }
 
 export interface GenericResult {
@@ -82,4 +80,14 @@ export interface AttackResult {
   position?: { x: number; y: number };
   currentPlayer?: string;
   winner?: string;
+}
+
+export interface AddShipsData {
+  gameId: string;
+  ships: Ship[];
+}
+
+export interface AddShipsResult {
+  gameId: string;
+  playerId: string;
 }
