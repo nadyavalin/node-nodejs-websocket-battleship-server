@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "cross-env NODE_ENV=production ts-node ./index.ts",
-    "start:dev": "cross-env NODE_ENV=development ts-node-dev ./index.ts",
+    "start:dev": "cross-env NODE_ENV=development nodemon ./index.ts",
     "test": "jest",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write ."
@@ -35,6 +35,6 @@
   "dependencies": {
     "cross-env": "^7.0.3",
     "dotenv": "^16.5.0",
-    "ws": "^8.8.0"
+    "ws": "^8.18.2"
   }
 }

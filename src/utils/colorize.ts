@@ -1,4 +1,4 @@
-export type Color = 'green' | 'cyan' | 'yellow' | 'red' | 'blue';
+export type Color = 'green' | 'cyan' | 'yellow' | 'red' | 'blue' | 'magenta';
 export type Style = 'bold' | 'underline' | 'reset';
 
 export function colorize(text: string, color: Color, styles: Style[] = []): string {
@@ -8,6 +8,7 @@ export function colorize(text: string, color: Color, styles: Style[] = []): stri
     yellow: '\x1b[33m',
     red: '\x1b[31m',
     blue: '\x1b[34m',
+    magenta: '\x1b[35m',
   };
 
   const styleCodes: Record<Style, string> = {
