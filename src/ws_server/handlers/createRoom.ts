@@ -6,7 +6,6 @@ import {
   CreateRoomData,
   GenericResult,
   CreateGameResult,
-  WebSocketMessageGeneric,
   CreateRoomMessage,
 } from '../../utils/types';
 import { broadcastRooms } from '../broadcast';
@@ -14,7 +13,7 @@ import { broadcastRooms } from '../broadcast';
 export function handleCreateRoom(
   wss: WebSocketServer,
   ws: WebSocket & { playerIndex: string | null },
-  parsedMessage: WebSocketMessageGeneric<CreateRoomMessage>
+  parsedMessage: WebSocketResponseGeneric<CreateRoomMessage>
 ) {
   const data: CreateRoomData = parsedMessage.data;
 

@@ -1,22 +1,16 @@
 import { WebSocketServer } from 'ws';
 import { logger } from '../utils/logger';
 import { storage } from './storage';
-import {
-  UpdateWinnersResult,
-  RoomInfo,
-  RoomUser,
-  WebSocketResponseGeneric,
-  UpdateRoomResult,
-} from '../utils/types';
+import { UpdateWinnersResult, RoomInfo, RoomUser, WebSocketResponse } from '../utils/types';
 
 export function broadcastWinners(wss: WebSocketServer) {
   const winners: UpdateWinnersResult = Array.from(storage.players.values()).map((player) => ({
     name: player.name,
     wins: player.wins,
   }));
-  const response: WebSocketResponseGeneric<UpdateWinnersResult> = {
+  const response: WebSocketResponse = {
     type: 'update_winners',
-    data: winners,
+    data: JSON.stringify(winners),
     id: 0,
   };
   wss.clients.forEach((client) => {
@@ -24,7 +18,7 @@ export function broadcastWinners(wss: WebSocketServer) {
       client.send(JSON.stringify(response));
     }
   });
-  logger.log('update_winners', { event: 'update_winners' }, response);
+  logger.log('update_winners', { event: 'update_winners' }, JSON.parse(response.data));
 }
 
 export function broadcastRooms(wss: WebSocketServer) {
@@ -40,9 +34,9 @@ export function broadcastRooms(wss: WebSocketServer) {
           }) as RoomUser
       ),
     }));
-  const response: WebSocketResponseGeneric<UpdateRoomResult> = {
+  const response: WebSocketResponse = {
     type: 'update_room',
-    data: { rooms },
+    data: JSON.stringify({ rooms }),
     id: 0,
   };
   wss.clients.forEach((client) => {
@@ -50,5 +44,5 @@ export function broadcastRooms(wss: WebSocketServer) {
       client.send(JSON.stringify(response));
     }
   });
-  logger.log('update_room', { event: 'update_room' }, response);
+  logger.log('update_room', { event: 'update_room' }, JSON.parse(response.data));
 }

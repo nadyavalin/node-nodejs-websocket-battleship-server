@@ -12,17 +12,12 @@ export interface RegResponseData {
 
 export interface WebSocketResponse {
   type: string;
-  data: string;
+  data: string; // JSON-строка, содержащая RegResponseData
   id: number;
 }
 
+// Для остальных команд, где data — объект
 export interface WebSocketResponseGeneric<T> {
-  type: string;
-  data: T;
-  id: number;
-}
-
-export interface WebSocketMessageGeneric<T> {
   type: string;
   data: T;
   id: number;

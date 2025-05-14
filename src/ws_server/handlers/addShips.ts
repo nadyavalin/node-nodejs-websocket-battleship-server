@@ -7,14 +7,13 @@ import {
   GenericResult,
   AddShipsResult,
   StartGameResult,
-  WebSocketMessageGeneric,
   AddShipsMessage,
 } from '../../utils/types';
 
 export function handleAddShips(
   wss: WebSocketServer,
   ws: WebSocket & { playerIndex: string | null },
-  parsedMessage: WebSocketMessageGeneric<AddShipsMessage>
+  parsedMessage: WebSocketResponseGeneric<AddShipsMessage>
 ) {
   const data: AddShipsData = parsedMessage.data;
 

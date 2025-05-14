@@ -8,7 +8,6 @@ import {
   UpdateRoomResult,
   CreateGameResult,
   RoomUser,
-  WebSocketMessageGeneric,
   AddUserToRoomMessage,
 } from '../../utils/types';
 import { broadcastRooms } from '../broadcast';
@@ -16,7 +15,7 @@ import { broadcastRooms } from '../broadcast';
 export function handleAddUserToRoom(
   wss: WebSocketServer,
   ws: WebSocket & { playerIndex: string | null },
-  parsedMessage: WebSocketMessageGeneric<AddUserToRoomMessage>
+  parsedMessage: WebSocketResponseGeneric<AddUserToRoomMessage>
 ) {
   const data: AddUserToRoomData = parsedMessage.data;
 

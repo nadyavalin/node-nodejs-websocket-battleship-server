@@ -6,14 +6,13 @@ import {
   AttackData,
   GenericResult,
   AttackResult,
-  WebSocketMessageGeneric,
   AttackMessage,
 } from '../../utils/types';
 
 export function handleAttack(
   wss: WebSocketServer,
   ws: WebSocket & { playerIndex: string | null },
-  parsedMessage: WebSocketMessageGeneric<AttackMessage>
+  parsedMessage: WebSocketResponseGeneric<AttackMessage>
 ) {
   const data: AttackData = parsedMessage.data;
 

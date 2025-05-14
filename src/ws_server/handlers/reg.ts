@@ -3,19 +3,18 @@ import { logger } from '../../utils/logger';
 import { storage } from '../storage';
 import {
   WebSocketResponse,
-  RegData,
-  RegResponseData,
-  WebSocketMessageGeneric,
   RegMessage,
+  RegResponseData,
+  WebSocketResponseGeneric,
 } from '../../utils/types';
 import { broadcastWinners } from '../broadcast';
 
 export function handleReg(
   wss: WebSocketServer,
   ws: WebSocket & { playerIndex: string | null },
-  parsedMessage: WebSocketMessageGeneric<string | RegMessage>
+  parsedMessage: WebSocketResponseGeneric<string | RegMessage>
 ) {
-  let data: RegData;
+  let data: RegMessage;
   if (typeof parsedMessage.data === 'string') {
     data = JSON.parse(parsedMessage.data);
   } else {
@@ -88,9 +87,8 @@ export function handleReg(
     ws.playerIndex = index;
   }
   ws.send(JSON.stringify(response));
-  const responseData: RegResponseData = JSON.parse(response.data);
-  logger.log('reg', data, responseData);
-  if (!responseData.error) {
+  logger.log('reg', data, JSON.parse(response.data) as RegResponseData);
+  if (!JSON.parse(response.data).error) {
     broadcastWinners(wss);
   }
 }
