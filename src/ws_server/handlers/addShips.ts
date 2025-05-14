@@ -97,7 +97,6 @@ export function handleAddShips(
 
   const occupiedCells = new Set<string>();
   for (const ship of data.ships) {
-    // Проверка формата
     if (
       !Number.isInteger(ship.position.x) ||
       !Number.isInteger(ship.position.y) ||
@@ -118,7 +117,6 @@ export function handleAddShips(
       return;
     }
 
-    // Проверка соответствия length и type
     const config = validShipConfig.find((c) => c.length === ship.length && c.type === ship.type);
     if (!config || shipCounts[ship.length].count >= shipCounts[ship.length].max) {
       const errorResponse: WebSocketResponseGeneric<GenericResult> = {
@@ -135,7 +133,6 @@ export function handleAddShips(
     }
     shipCounts[ship.length].count++;
 
-    // Проверка границ поля (10x10)
     const { x, y } = ship.position;
     const endX = ship.direction ? x + ship.length - 1 : x;
     const endY = ship.direction ? y : y + ship.length - 1;
@@ -153,7 +150,6 @@ export function handleAddShips(
       return;
     }
 
-    // Проверка пересечений
     for (let i = 0; i < ship.length; i++) {
       const cellX = ship.direction ? x + i : x;
       const cellY = ship.direction ? y : y + i;
@@ -175,7 +171,6 @@ export function handleAddShips(
     }
   }
 
-  // Проверка полного набора кораблей
   if (!validShipConfig.every((config) => shipCounts[config.length].count === config.count)) {
     const errorResponse: WebSocketResponseGeneric<GenericResult> = {
       type: 'error',
@@ -190,11 +185,9 @@ export function handleAddShips(
     return;
   }
 
-  // Сохранение кораблей
   player.ships = data.ships;
   storage.games.set(game.gameId, game);
 
-  // Ответ ships_added
   const response: WebSocketResponseGeneric<AddShipsResult> = {
     type: 'ships_added',
     data: {
@@ -206,7 +199,6 @@ export function handleAddShips(
   ws.send(JSON.stringify(response));
   logger.log('add_ships', data, response);
 
-  // Проверка, готовы ли оба игрока
   if (game.players.every((p) => p.ships.length > 0)) {
     game.players.forEach((p) => {
       const client = Array.from(

@@ -5,8 +5,8 @@ import {
   WebSocketResponseGeneric,
   CreateRoomData,
   GenericResult,
-  CreateGameResult,
   CreateRoomMessage,
+  WebSocketResponse,
 } from '../../utils/types';
 import { broadcastRooms } from '../broadcast';
 
@@ -68,15 +68,16 @@ export function handleCreateRoom(
   };
   storage.games.set(gameId, game);
 
-  const response: WebSocketResponseGeneric<CreateGameResult> = {
+  const response: WebSocketResponse = {
     type: 'create_game',
-    data: {
+    data: JSON.stringify({
       idGame: gameId,
       idPlayer: ws.playerIndex,
-    },
+    }),
     id: parsedMessage.id,
   };
   ws.send(JSON.stringify(response));
   broadcastRooms(wss);
-  logger.log('create_room', data, response);
+  const parsedResponse = JSON.parse(response.data);
+  logger.log('create_room', data, parsedResponse);
 }

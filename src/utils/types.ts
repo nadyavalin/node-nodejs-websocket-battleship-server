@@ -12,11 +12,10 @@ export interface RegResponseData {
 
 export interface WebSocketResponse {
   type: string;
-  data: string; // JSON-строка, содержащая RegResponseData
+  data: string; // JSON-строка
   id: number;
 }
 
-// Для остальных команд, где data — объект
 export interface WebSocketResponseGeneric<T> {
   type: string;
   data: T;
@@ -28,7 +27,7 @@ export interface RegMessage {
   password: string;
 }
 
-export type CreateRoomMessage = object;
+export type CreateRoomMessage = Record<string, never>;
 
 export interface AddUserToRoomMessage {
   indexRoom: string;
@@ -44,6 +43,11 @@ export interface AttackMessage {
   gameId: string;
   x: number;
   y: number;
+  indexPlayer: string;
+}
+
+export interface RandomAttackMessage {
+  gameId: string;
   indexPlayer: string;
 }
 
@@ -121,8 +125,7 @@ export interface AttackData {
 }
 
 export interface AttackResult {
-  status: 'miss' | 'hit' | 'killed' | 'gameover';
-  position?: { x: number; y: number };
-  currentPlayer?: string;
-  winner?: string;
+  status: 'miss' | 'shot' | 'killed';
+  position: { x: number; y: number };
+  currentPlayer: string;
 }
