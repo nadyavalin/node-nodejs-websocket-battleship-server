@@ -11,10 +11,13 @@ interface Room {
 }
 
 interface Ship {
-  x: number;
-  y: number;
-  direction: 'horizontal' | 'vertical';
+  position: {
+    x: number;
+    y: number;
+  };
+  direction: boolean; // true = horizontal, false = vertical
   length: number;
+  type: 'small' | 'medium' | 'large' | 'huge';
 }
 
 interface Board {

@@ -2,8 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   RegData,
-  RegResult,
-  WebSocketResponse,
+  RegResponseData,
   CreateRoomData,
   CreateGameResult,
   UpdateWinnersResult,
@@ -13,6 +12,8 @@ import {
   StartGameResult,
   AttackData,
   AttackResult,
+  AddShipsResult,
+  WebSocketResponseGeneric,
 } from './types';
 import { colorize, Color } from './colorize';
 
@@ -29,15 +30,16 @@ export const logger = {
       | { event: string }
       | { message: string },
     result:
-      | RegResult
-      | WebSocketResponse<
-          | RegResult
+      | RegResponseData
+      | WebSocketResponseGeneric<
+          | RegResponseData
           | CreateGameResult
           | UpdateWinnersResult
           | UpdateRoomResult
           | GenericResult
           | StartGameResult
           | AttackResult
+          | AddShipsResult
         >
       | { status: string }
       | { error: string }
@@ -51,7 +53,7 @@ export const logger = {
     };
 
     let color: Color = 'cyan';
-    if (command === 'error' || (result as RegResult).error) {
+    if (command === 'error' || (result as RegResponseData).error) {
       color = 'red';
     } else if (command === 'connection' || command === 'server') {
       color = 'green';

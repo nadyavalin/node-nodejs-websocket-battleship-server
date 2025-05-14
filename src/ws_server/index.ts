@@ -3,7 +3,6 @@ import { logger } from '../utils/logger';
 import { storage } from './storage';
 import {
   RegData,
-  RegResult,
   WebSocketResponse,
   CreateRoomData,
   CreateGameResult,
@@ -12,9 +11,14 @@ import {
   UpdateRoomResult,
   GenericResult,
   RoomUser,
+  StartGameResult,
   AttackData,
   AttackResult,
   RoomInfo,
+  AddShipsData,
+  AddShipsResult,
+  WebSocketResponseGeneric,
+  RegResponseData,
 } from '../utils/types';
 
 export function startWebSocketServer(port: number) {
@@ -29,7 +33,7 @@ export function startWebSocketServer(port: number) {
       name: player.name,
       wins: player.wins,
     }));
-    const response: WebSocketResponse<UpdateWinnersResult> = {
+    const response: WebSocketResponseGeneric<UpdateWinnersResult> = {
       type: 'update_winners',
       data: winners,
       id: 0,
@@ -55,7 +59,7 @@ export function startWebSocketServer(port: number) {
             }) as RoomUser
         ),
       }));
-    const response: WebSocketResponse<UpdateRoomResult> = {
+    const response: WebSocketResponseGeneric<UpdateRoomResult> = {
       type: 'update_room',
       data: { rooms },
       id: 0,
@@ -79,51 +83,56 @@ export function startWebSocketServer(port: number) {
         const parsedMessage = JSON.parse(message);
 
         if (parsedMessage.type === 'reg') {
-          const data: RegData = parsedMessage.data;
+          let data: RegData;
+          if (typeof parsedMessage.data === 'string') {
+            data = JSON.parse(parsedMessage.data);
+          } else {
+            data = parsedMessage.data;
+          }
 
           if (!data.name || !data.password) {
-            const errorResponse: WebSocketResponse<RegResult> = {
+            const errorResponse: WebSocketResponse = {
               type: 'reg',
-              data: {
+              data: JSON.stringify({
                 name: data.name || '',
                 index: '',
                 error: true,
                 errorText: 'Name and password are required',
-              },
-              id: 0,
+              }),
+              id: parsedMessage.id,
             };
             ws.send(JSON.stringify(errorResponse));
-            logger.log('reg', data, errorResponse);
+            logger.log('reg', data, JSON.parse(errorResponse.data) as RegResponseData);
             return;
           }
 
           let player = Array.from(storage.players.values()).find((p) => p.name === data.name);
-          let response: WebSocketResponse<RegResult>;
+          let response: WebSocketResponse;
 
           if (player) {
             if (player.password === data.password) {
               response = {
                 type: 'reg',
-                data: {
+                data: JSON.stringify({
                   name: player.name,
                   index: player.index,
                   error: false,
                   errorText: '',
-                },
-                id: 0,
+                }),
+                id: parsedMessage.id,
               };
               playerIndex = player.index;
               ws.playerIndex = playerIndex;
             } else {
               response = {
                 type: 'reg',
-                data: {
+                data: JSON.stringify({
                   name: player.name,
                   index: '',
                   error: true,
                   errorText: 'Invalid password',
-                },
-                id: 0,
+                }),
+                id: parsedMessage.id,
               };
             }
           } else {
@@ -137,21 +146,21 @@ export function startWebSocketServer(port: number) {
             storage.players.set(index, player);
             response = {
               type: 'reg',
-              data: {
+              data: JSON.stringify({
                 name: player.name,
                 index: player.index,
                 error: false,
                 errorText: '',
-              },
-              id: 0,
+              }),
+              id: parsedMessage.id,
             };
             playerIndex = index;
             ws.playerIndex = playerIndex;
           }
-
           ws.send(JSON.stringify(response));
-          logger.log('reg', data, response);
-          if (!response.data.error) {
+          const responseData: RegResponseData = JSON.parse(response.data);
+          logger.log('reg', data, responseData);
+          if (!responseData.error) {
             broadcastWinners();
           }
           return;
@@ -161,13 +170,13 @@ export function startWebSocketServer(port: number) {
           const data: CreateRoomData = parsedMessage.data;
 
           if (!playerIndex) {
-            const errorResponse: WebSocketResponse<GenericResult> = {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
               type: 'error',
               data: {
                 error: true,
                 errorText: 'Player not registered',
               },
-              id: 0,
+              id: parsedMessage.id,
             };
             ws.send(JSON.stringify(errorResponse));
             logger.log('create_room', data, errorResponse);
@@ -181,13 +190,13 @@ export function startWebSocketServer(port: number) {
             game.players.some((p) => p.index === playerIndex)
           );
           if (isInRoom || isInGame) {
-            const errorResponse: WebSocketResponse<GenericResult> = {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
               type: 'error',
               data: {
                 error: true,
                 errorText: 'Player is already in a room or game',
               },
-              id: 0,
+              id: parsedMessage.id,
             };
             ws.send(JSON.stringify(errorResponse));
             logger.log('create_room', data, errorResponse);
@@ -211,15 +220,14 @@ export function startWebSocketServer(port: number) {
           };
           storage.games.set(gameId, game);
 
-          const response: WebSocketResponse<CreateGameResult> = {
+          const response: WebSocketResponseGeneric<CreateGameResult> = {
             type: 'create_game',
             data: {
               idGame: gameId,
               idPlayer: playerIndex,
             },
-            id: 0,
+            id: parsedMessage.id,
           };
-
           ws.send(JSON.stringify(response));
           broadcastRooms();
           logger.log('create_room', data, response);
@@ -230,13 +238,13 @@ export function startWebSocketServer(port: number) {
           const data: AddUserToRoomData = parsedMessage.data;
 
           if (!playerIndex) {
-            const errorResponse: WebSocketResponse<GenericResult> = {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
               type: 'error',
               data: {
                 error: true,
                 errorText: 'Player not registered',
               },
-              id: 0,
+              id: parsedMessage.id,
             };
             ws.send(JSON.stringify(errorResponse));
             logger.log('add_user_to_room', data, errorResponse);
@@ -247,13 +255,13 @@ export function startWebSocketServer(port: number) {
             room.players.some((p) => p.index === playerIndex)
           );
           if (isInRoom) {
-            const errorResponse: WebSocketResponse<GenericResult> = {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
               type: 'error',
               data: {
                 error: true,
                 errorText: 'Player is already in a room',
               },
-              id: 0,
+              id: parsedMessage.id,
             };
             ws.send(JSON.stringify(errorResponse));
             logger.log('add_user_to_room', data, errorResponse);
@@ -262,28 +270,30 @@ export function startWebSocketServer(port: number) {
 
           const room = storage.rooms.get(data.indexRoom);
           if (!room) {
-            const errorResponse: WebSocketResponse<GenericResult> = {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
               type: 'error',
               data: {
                 error: true,
                 errorText: 'Room not found',
               },
-              id: 0,
+              id: parsedMessage.id,
             };
+            console.log('add_user_to_room:', JSON.stringify(errorResponse));
             ws.send(JSON.stringify(errorResponse));
             logger.log('add_user_to_room', data, errorResponse);
             return;
           }
 
           if (room.players.length >= 2) {
-            const errorResponse: WebSocketResponse<GenericResult> = {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
               type: 'error',
               data: {
                 error: true,
                 errorText: 'Room is full',
               },
-              id: 0,
+              id: parsedMessage.id,
             };
+            console.log('add_user_to_room:', JSON.stringify(errorResponse));
             ws.send(JSON.stringify(errorResponse));
             logger.log('add_user_to_room', data, errorResponse);
             return;
@@ -299,7 +309,7 @@ export function startWebSocketServer(port: number) {
             storage.games.set(game.gameId, game);
           }
 
-          const response: WebSocketResponse<UpdateRoomResult> = {
+          const response: WebSocketResponseGeneric<UpdateRoomResult> = {
             type: 'update_room',
             data: {
               rooms: Array.from(storage.rooms.values())
@@ -315,37 +325,39 @@ export function startWebSocketServer(port: number) {
                   ),
                 })),
             },
-            id: 0,
+            id: parsedMessage.id,
           };
 
-          const createGameResponse: WebSocketResponse<CreateGameResult> = {
+          const createGameResponse: WebSocketResponseGeneric<CreateGameResult> = {
             type: 'create_game',
             data: {
               idGame: game!.gameId,
               idPlayer: playerIndex,
             },
-            id: 0,
+            id: parsedMessage.id,
           };
 
           const creatorWs = Array.from(
             wss.clients as Set<WebSocket & { playerIndex: string | null }>
           ).find((client) => room.players.some((p) => p.index === client.playerIndex));
           if (creatorWs && creatorWs.readyState === WebSocket.OPEN) {
-            creatorWs.send(
-              JSON.stringify({
-                type: 'create_game',
-                data: {
-                  idGame: game!.gameId,
-                  idPlayer: room.players[0].index,
-                },
-                id: 0,
-              })
-            );
+            const createGameMsg = {
+              type: 'create_game',
+              data: {
+                idGame: game!.gameId,
+                idPlayer: room.players[0].index,
+              },
+              id: parsedMessage.id,
+            };
+            creatorWs.send(JSON.stringify(createGameMsg));
           }
+
+          console.log('createGameResponse:', JSON.stringify(createGameResponse));
           ws.send(JSON.stringify(createGameResponse));
 
           wss.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
+              console.log('readyState === WebSocket:', JSON.stringify(response));
               client.send(JSON.stringify(response));
             }
           });
@@ -360,17 +372,252 @@ export function startWebSocketServer(port: number) {
           return;
         }
 
-        if (parsedMessage.type === 'attack') {
-          const data: AttackData = parsedMessage.data;
+        if (parsedMessage.type === 'add_ships') {
+          const data: AddShipsData = parsedMessage.data;
 
           if (!playerIndex) {
-            const errorResponse: WebSocketResponse<GenericResult> = {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
               type: 'error',
               data: {
                 error: true,
                 errorText: 'Player not registered',
               },
-              id: 0,
+              id: parsedMessage.id,
+            };
+            ws.send(JSON.stringify(errorResponse));
+            logger.log('add_ships', data, errorResponse);
+            return;
+          }
+
+          if (playerIndex !== data.indexPlayer) {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
+              type: 'error',
+              data: {
+                error: true,
+                errorText: 'Invalid player index',
+              },
+              id: parsedMessage.id,
+            };
+            ws.send(JSON.stringify(errorResponse));
+            logger.log('add_ships', data, errorResponse);
+            return;
+          }
+
+          const game = storage.games.get(data.gameId);
+          if (!game) {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
+              type: 'error',
+              data: {
+                error: true,
+                errorText: 'Game not found',
+              },
+              id: parsedMessage.id,
+            };
+            ws.send(JSON.stringify(errorResponse));
+            logger.log('add_ships', data, errorResponse);
+            return;
+          }
+
+          const player = game.players.find((p) => p.index === playerIndex);
+          if (!player) {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
+              type: 'error',
+              data: {
+                error: true,
+                errorText: 'Player not in game',
+              },
+              id: parsedMessage.id,
+            };
+            ws.send(JSON.stringify(errorResponse));
+            logger.log('add_ships', data, errorResponse);
+            return;
+          }
+
+          // Валидация кораблей
+          const validShipConfig = [
+            { length: 4, type: 'huge', count: 1 },
+            { length: 3, type: 'large', count: 2 },
+            { length: 2, type: 'medium', count: 3 },
+            { length: 1, type: 'small', count: 4 },
+          ];
+
+          const shipCounts = validShipConfig.reduce(
+            (acc, config) => {
+              acc[config.length] = acc[config.length] || {
+                type: config.type,
+                count: 0,
+                max: config.count,
+              };
+              return acc;
+            },
+            {} as Record<number, { type: string; count: number; max: number }>
+          );
+
+          const occupiedCells = new Set<string>();
+          for (const ship of data.ships) {
+            // Проверка формата
+            if (
+              !Number.isInteger(ship.position.x) ||
+              !Number.isInteger(ship.position.y) ||
+              typeof ship.direction !== 'boolean' ||
+              !Number.isInteger(ship.length) ||
+              !['small', 'medium', 'large', 'huge'].includes(ship.type)
+            ) {
+              const errorResponse: WebSocketResponseGeneric<GenericResult> = {
+                type: 'error',
+                data: {
+                  error: true,
+                  errorText: 'Invalid ship format',
+                },
+                id: parsedMessage.id,
+              };
+              ws.send(JSON.stringify(errorResponse));
+              logger.log('add_ships', data, errorResponse);
+              return;
+            }
+
+            // Проверка соответствия length и type
+            const config = validShipConfig.find(
+              (c) => c.length === ship.length && c.type === ship.type
+            );
+            if (!config || shipCounts[ship.length].count >= shipCounts[ship.length].max) {
+              const errorResponse: WebSocketResponseGeneric<GenericResult> = {
+                type: 'error',
+                data: {
+                  error: true,
+                  errorText: 'Invalid ship length or type',
+                },
+                id: parsedMessage.id,
+              };
+              ws.send(JSON.stringify(errorResponse));
+              logger.log('add_ships', data, errorResponse);
+              return;
+            }
+            shipCounts[ship.length].count++;
+
+            // Проверка границ поля (10x10)
+            const { x, y } = ship.position;
+            const endX = ship.direction ? x + ship.length - 1 : x;
+            const endY = ship.direction ? y : y + ship.length - 1;
+            if (x < 0 || y < 0 || endX >= 10 || endY >= 10) {
+              const errorResponse: WebSocketResponseGeneric<GenericResult> = {
+                type: 'error',
+                data: {
+                  error: true,
+                  errorText: 'Ship out of bounds',
+                },
+                id: parsedMessage.id,
+              };
+              ws.send(JSON.stringify(errorResponse));
+              logger.log('add_ships', data, errorResponse);
+              return;
+            }
+
+            // Проверка пересечений
+            for (let i = 0; i < ship.length; i++) {
+              const cellX = ship.direction ? x + i : x;
+              const cellY = ship.direction ? y : y + i;
+              const cellKey = `${cellX},${cellY}`;
+              if (occupiedCells.has(cellKey)) {
+                const errorResponse: WebSocketResponseGeneric<GenericResult> = {
+                  type: 'error',
+                  data: {
+                    error: true,
+                    errorText: 'Ships overlap',
+                  },
+                  id: parsedMessage.id,
+                };
+                ws.send(JSON.stringify(errorResponse));
+                logger.log('add_ships', data, errorResponse);
+                return;
+              }
+              occupiedCells.add(cellKey);
+            }
+          }
+
+          // Проверка полного набора кораблей
+          if (
+            !validShipConfig.every((config) => shipCounts[config.length].count === config.count)
+          ) {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
+              type: 'error',
+              data: {
+                error: true,
+                errorText: 'Incorrect number of ships',
+              },
+              id: parsedMessage.id,
+            };
+            ws.send(JSON.stringify(errorResponse));
+            logger.log('add_ships', data, errorResponse);
+            return;
+          }
+
+          // Сохранение кораблей
+          player.ships = data.ships;
+          storage.games.set(game.gameId, game);
+
+          // Ответ ships_added
+          const response: WebSocketResponseGeneric<AddShipsResult> = {
+            type: 'ships_added',
+            data: {
+              gameId: game.gameId,
+              playerId: playerIndex,
+            },
+            id: parsedMessage.id,
+          };
+          ws.send(JSON.stringify(response));
+          logger.log('add_ships', data, response);
+
+          // Проверка, готовы ли оба игрока
+          if (game.players.every((p) => p.ships.length > 0)) {
+            game.players.forEach((p) => {
+              const client = Array.from(
+                wss.clients as Set<WebSocket & { playerIndex: string | null }>
+              ).find((c) => c.playerIndex === p.index);
+              if (client && client.readyState === WebSocket.OPEN) {
+                const startGameResponse: WebSocketResponseGeneric<StartGameResult> = {
+                  type: 'start_game',
+                  data: {
+                    ships: p.ships,
+                    currentPlayerIndex: game.players[0].index,
+                  },
+                  id: parsedMessage.id,
+                };
+                console.log('startGameResponse:', JSON.stringify(startGameResponse));
+                client.send(JSON.stringify(startGameResponse));
+                logger.log('start_game', { player: p.index }, startGameResponse);
+              }
+            });
+          }
+
+          return;
+        }
+
+        if (parsedMessage.type === 'attack') {
+          const data: AttackData = parsedMessage.data;
+
+          if (!playerIndex) {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
+              type: 'error',
+              data: {
+                error: true,
+                errorText: 'Player not registered',
+              },
+              id: parsedMessage.id,
+            };
+            ws.send(JSON.stringify(errorResponse));
+            logger.log('attack', data, errorResponse);
+            return;
+          }
+
+          if (playerIndex !== data.indexPlayer) {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
+              type: 'error',
+              data: {
+                error: true,
+                errorText: 'Invalid player index',
+              },
+              id: parsedMessage.id,
             };
             ws.send(JSON.stringify(errorResponse));
             logger.log('attack', data, errorResponse);
@@ -379,13 +626,13 @@ export function startWebSocketServer(port: number) {
 
           const game = storage.games.get(data.gameId);
           if (!game) {
-            const errorResponse: WebSocketResponse<GenericResult> = {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
               type: 'error',
               data: {
                 error: true,
                 errorText: 'Game not found',
               },
-              id: 0,
+              id: parsedMessage.id,
             };
             ws.send(JSON.stringify(errorResponse));
             logger.log('attack', data, errorResponse);
@@ -393,13 +640,13 @@ export function startWebSocketServer(port: number) {
           }
 
           if (game.currentPlayer !== playerIndex) {
-            const errorResponse: WebSocketResponse<GenericResult> = {
+            const errorResponse: WebSocketResponseGeneric<GenericResult> = {
               type: 'error',
               data: {
                 error: true,
                 errorText: 'Not your turn',
               },
-              id: 0,
+              id: parsedMessage.id,
             };
             ws.send(JSON.stringify(errorResponse));
             logger.log('attack', data, errorResponse);
@@ -409,14 +656,14 @@ export function startWebSocketServer(port: number) {
           const opponent = game.players.find((p) => p.index !== playerIndex);
           let status: AttackResult['status'] = 'miss';
 
-          const response: WebSocketResponse<AttackResult> = {
+          const response: WebSocketResponseGeneric<AttackResult> = {
             type: 'attack',
             data: {
               status,
               position: { x: data.x, y: data.y },
               currentPlayer: opponent!.index,
             },
-            id: 0,
+            id: parsedMessage.id,
           };
 
           game.currentPlayer = opponent!.index;
@@ -424,6 +671,7 @@ export function startWebSocketServer(port: number) {
 
           wss.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
+              console.log('readyState === WebSocket:', JSON.stringify(response));
               client.send(JSON.stringify(response));
             }
           });
@@ -432,18 +680,18 @@ export function startWebSocketServer(port: number) {
           return;
         }
 
-        const errorResponse: WebSocketResponse<GenericResult> = {
+        const errorResponse: WebSocketResponseGeneric<GenericResult> = {
           type: 'error',
           data: {
             error: true,
             errorText: 'Unknown command',
           },
-          id: 0,
+          id: parsedMessage.id,
         };
         ws.send(JSON.stringify(errorResponse));
         logger.log('error', { message: message.toString() }, errorResponse);
       } catch {
-        const errorResponse: WebSocketResponse<GenericResult> = {
+        const errorResponse: WebSocketResponseGeneric<GenericResult> = {
           type: 'error',
           data: {
             error: true,

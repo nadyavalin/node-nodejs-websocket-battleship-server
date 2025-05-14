@@ -3,14 +3,20 @@ export interface RegData {
   password: string;
 }
 
-export interface RegResult {
+export interface RegResponseData {
   name: string;
   index: string;
   error: boolean;
   errorText: string;
 }
 
-export interface WebSocketResponse<T> {
+export interface WebSocketResponse {
+  type: string;
+  data: string;
+  id: number;
+}
+
+export interface WebSocketResponseGeneric<T> {
   type: string;
   data: T;
   id: number;
@@ -57,10 +63,24 @@ export interface GenericResult {
 }
 
 export interface Ship {
-  x: number;
-  y: number;
-  direction: 'horizontal' | 'vertical';
+  position: {
+    x: number;
+    y: number;
+  };
+  direction: boolean; // true = horizontal, false = vertical
   length: number;
+  type: 'small' | 'medium' | 'large' | 'huge';
+}
+
+export interface AddShipsData {
+  gameId: string;
+  ships: Ship[];
+  indexPlayer: string;
+}
+
+export interface AddShipsResult {
+  gameId: string;
+  playerId: string;
 }
 
 export interface StartGameResult {
@@ -80,14 +100,4 @@ export interface AttackResult {
   position?: { x: number; y: number };
   currentPlayer?: string;
   winner?: string;
-}
-
-export interface AddShipsData {
-  gameId: string;
-  ships: Ship[];
-}
-
-export interface AddShipsResult {
-  gameId: string;
-  playerId: string;
 }
