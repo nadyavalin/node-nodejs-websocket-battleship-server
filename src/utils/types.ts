@@ -22,6 +22,36 @@ export interface WebSocketResponseGeneric<T> {
   id: number;
 }
 
+export interface WebSocketMessageGeneric<T> {
+  type: string;
+  data: T;
+  id: number;
+}
+
+export interface RegMessage {
+  name: string;
+  password: string;
+}
+
+export type CreateRoomMessage = object;
+
+export interface AddUserToRoomMessage {
+  indexRoom: string;
+}
+
+export interface AddShipsMessage {
+  gameId: string;
+  ships: Ship[];
+  indexPlayer: string;
+}
+
+export interface AttackMessage {
+  gameId: string;
+  x: number;
+  y: number;
+  indexPlayer: string;
+}
+
 export interface Winner {
   name: string;
   wins: number;
