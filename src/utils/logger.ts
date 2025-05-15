@@ -79,7 +79,8 @@ export const logger = {
       command === 'attack' ||
       command === 'randomAttack' ||
       command === 'turn' ||
-      command === 'finish'
+      command === 'finish' ||
+      command === 'ships_added'
     ) {
       color = 'cyan';
     }
