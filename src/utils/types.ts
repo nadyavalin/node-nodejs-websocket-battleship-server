@@ -129,3 +129,11 @@ export interface AttackResult {
   position: { x: number; y: number };
   currentPlayer: string;
 }
+
+export interface TurnResult {
+  currentPlayer: string;
+}
+
+export interface FinishResult {
+  winPlayer: string;
+}

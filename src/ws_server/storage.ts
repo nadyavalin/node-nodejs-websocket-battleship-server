@@ -1,3 +1,5 @@
+import { Ship } from '../utils/types';
+
 interface Player {
   name: string;
   password: string;
@@ -10,29 +12,16 @@ interface Room {
   players: Player[];
 }
 
-interface Ship {
-  position: {
-    x: number;
-    y: number;
-  };
-  direction: boolean; // true = horizontal, false = vertical
-  length: number;
-  type: 'small' | 'medium' | 'large' | 'huge';
+interface GamePlayer {
+  index: string;
+  ships: Ship[];
 }
 
-interface Board {
-  cells: Array<{
-    x: number;
-    y: number;
-    status: 'empty' | 'ship' | 'hit' | 'miss';
-  }>;
-}
-
-interface Game {
+export interface Game {
   gameId: string;
-  players: { index: string; ships: Ship[] }[];
+  players: GamePlayer[];
   currentPlayer: string;
-  board: Board;
+  board: { cells: { x: number; y: number; status: 'miss' | 'shot' | 'killed' }[] };
 }
 
 export const storage = {

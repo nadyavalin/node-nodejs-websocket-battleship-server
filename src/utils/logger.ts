@@ -13,6 +13,8 @@ import {
   AttackData,
   AttackResult,
   AddShipsResult,
+  TurnResult,
+  FinishResult,
   WebSocketResponseGeneric,
 } from './types';
 import { colorize, Color } from './colorize';
@@ -28,7 +30,10 @@ export const logger = {
       | AddUserToRoomData
       | AttackData
       | { event: string }
-      | { message: string },
+      | { message: string }
+      | { aroundCell: { x: number; y: number } }
+      | { player: string }
+      | { winner: string },
     result:
       | RegResponseData
       | WebSocketResponseGeneric<
@@ -40,6 +45,8 @@ export const logger = {
           | StartGameResult
           | AttackResult
           | AddShipsResult
+          | TurnResult
+          | FinishResult
         >
       | { status: string }
       | { error: string }
@@ -59,11 +66,21 @@ export const logger = {
       color = 'green';
     } else if (command === 'reg') {
       color = 'blue';
-    } else if (command === 'create_room' || command === 'add_user_to_room') {
+    } else if (
+      command === 'create_room' ||
+      command === 'add_user_to_room' ||
+      command === 'single_play'
+    ) {
       color = 'yellow';
     } else if (command === 'update_winners') {
       color = 'magenta';
-    } else if (command === 'start_game' || command === 'attack') {
+    } else if (
+      command === 'start_game' ||
+      command === 'attack' ||
+      command === 'randomAttack' ||
+      command === 'turn' ||
+      command === 'finish'
+    ) {
       color = 'cyan';
     }
 

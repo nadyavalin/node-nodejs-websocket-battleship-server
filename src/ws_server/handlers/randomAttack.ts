@@ -4,19 +4,19 @@ import { storage } from '../storage';
 import {
   WebSocketResponse,
   WebSocketResponseGeneric,
-  AttackMessage,
+  RandomAttackMessage,
   GenericResult,
   AttackResult,
   Ship,
 } from '../../utils/types';
 import { broadcastWinners } from '../broadcast';
 
-export function handleAttack(
+export function handleRandomAttack(
   wss: WebSocketServer,
   ws: WebSocket & { playerIndex: string | null },
-  parsedMessage: WebSocketResponseGeneric<AttackMessage>
+  parsedMessage: WebSocketResponseGeneric<RandomAttackMessage>
 ) {
-  const data: AttackMessage = parsedMessage.data;
+  const data: RandomAttackMessage = parsedMessage.data;
 
   if (!ws.playerIndex) {
     const errorResponse: WebSocketResponse = {
@@ -28,7 +28,7 @@ export function handleAttack(
       id: parsedMessage.id,
     };
     ws.send(JSON.stringify(errorResponse));
-    logger.log('attack', data, JSON.parse(errorResponse.data));
+    logger.log('randomAttack', data, JSON.parse(errorResponse.data));
     return;
   }
 
@@ -42,7 +42,7 @@ export function handleAttack(
       id: parsedMessage.id,
     };
     ws.send(JSON.stringify(errorResponse));
-    logger.log('attack', data, JSON.parse(errorResponse.data));
+    logger.log('randomAttack', data, JSON.parse(errorResponse.data));
     return;
   }
 
@@ -57,7 +57,7 @@ export function handleAttack(
       id: parsedMessage.id,
     };
     ws.send(JSON.stringify(errorResponse));
-    logger.log('attack', data, JSON.parse(errorResponse.data));
+    logger.log('randomAttack', data, JSON.parse(errorResponse.data));
     return;
   }
 
@@ -71,7 +71,7 @@ export function handleAttack(
       id: parsedMessage.id,
     };
     ws.send(JSON.stringify(errorResponse));
-    logger.log('attack', data, JSON.parse(errorResponse.data));
+    logger.log('randomAttack', data, JSON.parse(errorResponse.data));
     return;
   }
 
@@ -86,10 +86,34 @@ export function handleAttack(
       id: parsedMessage.id,
     };
     ws.send(JSON.stringify(errorResponse));
-    logger.log('attack', data, JSON.parse(errorResponse.data));
+    logger.log('randomAttack', data, JSON.parse(errorResponse.data));
     return;
   }
 
+  const availableCells = [];
+  for (let x = 0; x < 10; x++) {
+    for (let y = 0; y < 10; y++) {
+      if (!game.board.cells.some((cell) => cell.x === x && cell.y === y)) {
+        availableCells.push({ x, y });
+      }
+    }
+  }
+
+  if (availableCells.length === 0) {
+    const errorResponse: WebSocketResponse = {
+      type: 'error',
+      data: JSON.stringify({
+        error: true,
+        errorText: 'No available cells to attack',
+      } as GenericResult),
+      id: parsedMessage.id,
+    };
+    ws.send(JSON.stringify(errorResponse));
+    logger.log('randomAttack', data, JSON.parse(errorResponse.data));
+    return;
+  }
+
+  const randomCell = availableCells[Math.floor(Math.random() * availableCells.length)];
   let status: AttackResult['status'] = 'miss';
   let hitShip: Ship | null = null;
 
@@ -101,7 +125,7 @@ export function handleAttack(
       const cellY = ship.direction ? shipY : shipY + i;
       shipCells.push({ x: cellX, y: cellY });
     }
-    if (shipCells.some((cell) => cell.x === data.x && cell.y === data.y)) {
+    if (shipCells.some((cell) => cell.x === randomCell.x && cell.y === randomCell.y)) {
       status = 'shot';
       hitShip = ship;
       break;
@@ -111,7 +135,7 @@ export function handleAttack(
   const response: WebSocketResponse = {
     type: 'attack',
     data: JSON.stringify({
-      position: { x: data.x, y: data.y },
+      position: { x: randomCell.x, y: randomCell.y },
       currentPlayer: ws.playerIndex,
       status,
     } as AttackResult),
@@ -123,7 +147,7 @@ export function handleAttack(
     const hitCells = new Set<string>(
       game.board.cells.filter((cell) => cell.status === 'shot').map((cell) => `${cell.x},${cell.y}`)
     );
-    hitCells.add(`${data.x},${data.y}`);
+    hitCells.add(`${randomCell.x},${randomCell.y}`);
     const shipCells = [];
     for (let i = 0; i < hitShip.length; i++) {
       const cellX = hitShip.direction ? hitShip.position.x + i : hitShip.position.x;
@@ -132,7 +156,7 @@ export function handleAttack(
     }
     if (shipCells.every((cell) => hitCells.has(cell))) {
       response.data = JSON.stringify({
-        position: { x: data.x, y: data.y },
+        position: { x: randomCell.x, y: randomCell.y },
         currentPlayer: ws.playerIndex,
         status: 'killed',
       } as AttackResult);
@@ -168,7 +192,7 @@ export function handleAttack(
           }
         });
         game.board.cells.push({ x: cell.x, y: cell.y, status: 'miss' });
-        logger.log('attack', { aroundCell: cell }, JSON.parse(aroundResponse.data));
+        logger.log('randomAttack', { aroundCell: cell }, JSON.parse(aroundResponse.data));
       });
 
       const opponentShipsCells = opponent.ships.flatMap((ship) => {
@@ -189,7 +213,7 @@ export function handleAttack(
     }
   }
 
-  game.board.cells.push({ x: data.x, y: data.y, status });
+  game.board.cells.push({ x: randomCell.x, y: randomCell.y, status });
   storage.games.set(game.gameId, game);
 
   wss.clients.forEach((client) => {
@@ -198,7 +222,7 @@ export function handleAttack(
     }
   });
 
-  logger.log('attack', data, JSON.parse(response.data));
+  logger.log('randomAttack', data, JSON.parse(response.data));
 
   const nextPlayer = status === 'miss' ? opponent.index : ws.playerIndex;
   game.currentPlayer = nextPlayer;
