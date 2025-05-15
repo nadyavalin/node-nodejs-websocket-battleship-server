@@ -29,19 +29,19 @@ export function handleAddShips(
     return;
   }
 
-  // if (ws.playerIndex !== data.indexPlayer) {
-  //   const errorResponse: WebSocketResponse = {
-  //     type: 'error',
-  //     data: JSON.stringify({
-  //       error: true,
-  //       errorText: 'Invalid player index',
-  //     } as GenericResult),
-  //     id: parsedMessage.id,
-  //   };
-  //   ws.send(JSON.stringify(errorResponse));
-  //   logger.log('add_ships', data, JSON.parse(errorResponse.data));
-  //   return;
-  // }
+  if (ws.playerIndex !== data.indexPlayer) {
+    const errorResponse: WebSocketResponse = {
+      type: 'error',
+      data: JSON.stringify({
+        error: true,
+        errorText: 'Invalid player index',
+      } as GenericResult),
+      id: parsedMessage.id,
+    };
+    ws.send(JSON.stringify(errorResponse));
+    logger.log('add_ships', data, JSON.parse(errorResponse.data));
+    return;
+  }
 
   const game = storage.games.get(data.gameId);
   if (!game) {

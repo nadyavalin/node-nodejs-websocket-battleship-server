@@ -24,7 +24,6 @@ interface ExtendedWebSocket extends WebSocket {
 }
 
 export function handleConnection(wss: WebSocketServer, ws: WebSocket) {
-  // Добавляем свойство playerIndex к ws
   const extendedWs: ExtendedWebSocket = ws as ExtendedWebSocket;
   extendedWs.playerIndex = null;
 

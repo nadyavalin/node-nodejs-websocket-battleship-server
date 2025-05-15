@@ -83,16 +83,29 @@ export function handleAddUserToRoom(
   room.players.push(player!);
   storage.rooms.set(data.indexRoom, room);
 
-  const game = storage.games.get(`game_${data.indexRoom.split('_')[1]}`);
-  if (game) {
-    game.players.push({ index: ws.playerIndex!, ships: [] });
-    storage.games.set(game.gameId, game);
+  const gameId = `game_${data.indexRoom.split('_')[1]}`;
+  const game = storage.games.get(gameId);
+  if (!game) {
+    const errorResponse: WebSocketResponse = {
+      type: 'error',
+      data: JSON.stringify({
+        error: true,
+        errorText: `Game not found for gameId: ${gameId}`,
+      } as GenericResult),
+      id: parsedMessage.id,
+    };
+    ws.send(JSON.stringify(errorResponse));
+    logger.log('add_user_to_room', data, JSON.parse(errorResponse.data));
+    return;
   }
+
+  game.players.push({ index: ws.playerIndex!, ships: [] });
+  storage.games.set(game.gameId, game);
 
   const createGameResponse: WebSocketResponse = {
     type: 'create_game',
     data: JSON.stringify({
-      idGame: game!.gameId,
+      idGame: game.gameId,
       idPlayer: ws.playerIndex,
     } as CreateGameResult),
     id: parsedMessage.id,
@@ -106,7 +119,7 @@ export function handleAddUserToRoom(
     const createGameMsg: WebSocketResponse = {
       type: 'create_game',
       data: JSON.stringify({
-        idGame: game!.gameId,
+        idGame: game.gameId,
         idPlayer: room.players[0].index,
       } as CreateGameResult),
       id: parsedMessage.id,
