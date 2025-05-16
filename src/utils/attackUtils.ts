@@ -1,5 +1,5 @@
 import { storage } from '../ws_server/storage';
-import { AttackResult, Ship } from './types';
+import { Ship } from './types';
 
 export function getShipCells(ship: Ship): { x: number; y: number }[] {
   const { x: shipX, y: shipY } = ship.position;
@@ -40,55 +40,85 @@ export function getAroundCells(ship: Ship): { x: number; y: number }[] {
 
 export function processAttack(
   gameId: string,
-  attackerIndex: string,
+  playerIndex: string,
   x: number,
   y: number
 ): {
-  status: AttackResult['status'];
+  status: 'miss' | 'shot' | 'killed';
   isGameOver: boolean;
   aroundCells: { x: number; y: number }[];
 } {
-  const game = storage.games.get(gameId)!;
-  const opponent = game.players.find((p) => p.index !== attackerIndex)!;
+  const game = storage.games.get(gameId);
+  if (!game) {
+    return { status: 'miss', isGameOver: false, aroundCells: [] };
+  }
 
-  let status: AttackResult['status'] = 'miss';
+  const opponent = game.players.find((p) => p.index !== playerIndex);
+  if (!opponent) {
+    return { status: 'miss', isGameOver: false, aroundCells: [] };
+  }
+
+  const currentHitKey = `${x},${y}`;
+  let status: 'miss' | 'shot' | 'killed' = 'miss';
   let hitShip: Ship | null = null;
 
   for (const ship of opponent.ships) {
-    const shipCells = getShipCells(ship);
-    if (shipCells.some((cell) => cell.x === x && cell.y === y)) {
-      status = 'shot';
+    const shipCells = getShipCells(ship).map((cell) => `${cell.x},${cell.y}`);
+    if (shipCells.includes(currentHitKey)) {
       hitShip = ship;
+      status = 'shot';
       break;
     }
   }
 
-  let isGameOver = false;
-  let aroundCells: { x: number; y: number }[] = [];
+  const existingCellIndex = game.board.cells.findIndex((cell) => cell.x === x && cell.y === y);
+  const isNewAttack = existingCellIndex === -1;
 
-  if (status === 'shot' && hitShip) {
-    const hitCells = new Set<string>(
-      game.board.cells.filter((cell) => cell.status === 'shot').map((cell) => `${cell.x},${cell.y}`)
-    );
-    hitCells.add(`${x},${y}`);
+  if (!isNewAttack) {
+    status = game.board.cells[existingCellIndex].status;
+  } else {
+    game.board.cells.push({ x, y, status });
+  }
+
+  if (hitShip && isNewAttack && status === 'shot') {
     const shipCells = getShipCells(hitShip);
+    const shipCellKeys = shipCells.map((cell) => `${cell.x},${cell.y}`);
 
-    if (shipCells.every((cell) => hitCells.has(`${cell.x},${cell.y}`))) {
+    const allShipCellsHit = shipCellKeys.every((cellKey) =>
+      game.board.cells.some(
+        (cell) =>
+          `${cell.x},${cell.y}` === cellKey && (cell.status === 'shot' || cell.status === 'killed')
+      )
+    );
+
+    if (allShipCellsHit) {
       status = 'killed';
-      aroundCells = getAroundCells(hitShip);
-
-      const opponentShipsCells = opponent.ships.flatMap(getShipCells);
-      const hitCellsAll = new Set<string>(
-        game.board.cells
-          .filter((cell) => cell.status === 'shot')
-          .map((cell) => `${cell.x},${cell.y}`)
-      );
-      isGameOver = opponentShipsCells.every((cell) => hitCellsAll.has(`${cell.x},${cell.y}`));
+      shipCells.forEach((shipCell) => {
+        const cellIndex = game.board.cells.findIndex(
+          (c) => c.x === shipCell.x && c.y === shipCell.y
+        );
+        if (cellIndex !== -1) {
+          game.board.cells[cellIndex].status = 'killed';
+        }
+      });
     }
   }
 
-  game.board.cells.push({ x, y, status });
-  storage.games.set(gameId, game);
+  const allShipsKilled = opponent.ships.every((ship) => {
+    const shipCells = getShipCells(ship);
+    return shipCells.every((shipCell) =>
+      game.board.cells.some(
+        (cell) =>
+          cell.x === shipCell.x &&
+          cell.y === shipCell.y &&
+          (cell.status === 'shot' || cell.status === 'killed')
+      )
+    );
+  });
 
-  return { status, isGameOver, aroundCells };
+  return {
+    status,
+    isGameOver: allShipsKilled,
+    aroundCells: status === 'killed' && hitShip ? getAroundCells(hitShip) : [],
+  };
 }

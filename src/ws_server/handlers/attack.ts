@@ -34,7 +34,6 @@ export function handleAttack(
 ) {
   const data: AttackMessage = parsedMessage.data;
 
-  // Проверка регистрации игрока
   if (!ws.playerIndex) {
     const error: GenericResult = {
       error: true,
@@ -50,7 +49,6 @@ export function handleAttack(
     return;
   }
 
-  // Проверка соответствия индекса игрока
   if (ws.playerIndex !== data.indexPlayer) {
     const error: GenericResult = {
       error: true,
@@ -66,7 +64,6 @@ export function handleAttack(
     return;
   }
 
-  // Проверка существования игры
   const game = storage.games.get(data.gameId);
   if (!game) {
     const error: GenericResult = {
@@ -83,7 +80,6 @@ export function handleAttack(
     return;
   }
 
-  // Проверка, ходит ли текущий игрок
   if (game.currentPlayer !== ws.playerIndex) {
     const error: GenericResult = {
       error: true,
@@ -99,19 +95,7 @@ export function handleAttack(
     return;
   }
 
-  // Проверка наличия противника
   const opponent = game.players.find((p) => p.index !== ws.playerIndex);
-  logger.log(
-    'attack_debug',
-    {
-      gameId: data.gameId,
-      gameExists: !!game,
-      currentPlayer: game.currentPlayer,
-      playerIndex: ws.playerIndex,
-      opponentExists: !!opponent,
-    },
-    { status: 'debug' }
-  );
   if (!opponent) {
     const error: GenericResult = {
       error: true,
@@ -127,7 +111,6 @@ export function handleAttack(
     return;
   }
 
-  // Обработка атаки
   const { status, isGameOver, aroundCells } = processAttack(
     data.gameId,
     ws.playerIndex,
@@ -135,7 +118,6 @@ export function handleAttack(
     data.y
   );
 
-  // Отправляем результат атаки
   const response: WebSocketResponse = {
     type: 'attack',
     data: JSON.stringify({
@@ -156,9 +138,7 @@ export function handleAttack(
     },
     { status: 'debug' }
   );
-  logger.log('attack', data, JSON.parse(response.data));
 
-  // Отправляем клетки вокруг уничтоженного корабля
   aroundCells.forEach((cell) => {
     const aroundResponse: WebSocketResponse = {
       type: 'attack',
@@ -170,10 +150,8 @@ export function handleAttack(
       id: parsedMessage.id,
     };
     broadcastToGamePlayers(wss, data.gameId, aroundResponse);
-    logger.log('attack', { aroundCell: cell }, JSON.parse(aroundResponse.data));
   });
 
-  // Обновляем ход
   const nextPlayer = status === 'miss' ? opponent.index : ws.playerIndex;
   game.currentPlayer = nextPlayer;
   const turnResponse: WebSocketResponse = {
@@ -186,7 +164,6 @@ export function handleAttack(
   broadcastToGamePlayers(wss, data.gameId, turnResponse);
   logger.log('turn', { player: nextPlayer }, JSON.parse(turnResponse.data));
 
-  // Обработка конца игры
   if (isGameOver) {
     const winner = storage.players.get(ws.playerIndex);
     if (winner) {
@@ -195,13 +172,10 @@ export function handleAttack(
     }
     const finishResponse: WebSocketResponse = {
       type: 'finish',
-      data: JSON.stringify({
-        winPlayer: ws.playerIndex,
-      } as FinishResult),
+      data: JSON.stringify({ winPlayer: ws.playerIndex } as FinishResult),
       id: parsedMessage.id,
     };
     broadcastToGamePlayers(wss, data.gameId, finishResponse);
-    logger.log('finish', { winner: ws.playerIndex }, JSON.parse(finishResponse.data));
     storage.games.delete(data.gameId);
     broadcastWinners(wss);
   }

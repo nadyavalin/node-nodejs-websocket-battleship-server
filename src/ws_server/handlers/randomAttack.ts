@@ -34,7 +34,6 @@ export function handleRandomAttack(
 ) {
   const data: RandomAttackMessage = parsedMessage.data;
 
-  // Проверка регистрации игрока
   if (!ws.playerIndex) {
     const error: GenericResult = {
       error: true,
@@ -50,7 +49,6 @@ export function handleRandomAttack(
     return;
   }
 
-  // Проверка соответствия индекса игрока
   if (ws.playerIndex !== data.indexPlayer) {
     const error: GenericResult = {
       error: true,
@@ -66,7 +64,6 @@ export function handleRandomAttack(
     return;
   }
 
-  // Проверка существования игры
   const game = storage.games.get(data.gameId);
   if (!game) {
     const error: GenericResult = {
@@ -83,7 +80,6 @@ export function handleRandomAttack(
     return;
   }
 
-  // Проверка, ходит ли текущий игрок
   if (game.currentPlayer !== ws.playerIndex) {
     const error: GenericResult = {
       error: true,
@@ -99,7 +95,6 @@ export function handleRandomAttack(
     return;
   }
 
-  // Проверка наличия противника
   const opponent = game.players.find((p) => p.index !== ws.playerIndex);
   if (!opponent) {
     const error: GenericResult = {
@@ -116,7 +111,6 @@ export function handleRandomAttack(
     return;
   }
 
-  // Выбор случайной клетки
   const availableCells = [];
   for (let x = 0; x < 10; x++) {
     for (let y = 0; y < 10; y++) {
@@ -143,7 +137,6 @@ export function handleRandomAttack(
 
   const randomCell = availableCells[Math.floor(Math.random() * availableCells.length)];
 
-  // Обработка атаки
   const { status, isGameOver, aroundCells } = processAttack(
     data.gameId,
     ws.playerIndex,
@@ -151,7 +144,6 @@ export function handleRandomAttack(
     randomCell.y
   );
 
-  // Отправляем результат атаки
   const response: WebSocketResponse = {
     type: 'attack',
     data: JSON.stringify({
@@ -174,7 +166,6 @@ export function handleRandomAttack(
   );
   logger.log('randomAttack', data, JSON.parse(response.data));
 
-  // Отправляем клетки вокруг уничтоженного корабля
   aroundCells.forEach((cell) => {
     const aroundResponse: WebSocketResponse = {
       type: 'attack',
@@ -189,7 +180,6 @@ export function handleRandomAttack(
     logger.log('randomAttack', { aroundCell: cell }, JSON.parse(aroundResponse.data));
   });
 
-  // Обновляем ход
   const nextPlayer = status === 'miss' ? opponent.index : ws.playerIndex;
   game.currentPlayer = nextPlayer;
   const turnResponse: WebSocketResponse = {
@@ -202,7 +192,6 @@ export function handleRandomAttack(
   broadcastToGamePlayers(wss, data.gameId, turnResponse);
   logger.log('turn', { player: nextPlayer }, JSON.parse(turnResponse.data));
 
-  // Обработка конца игры
   if (isGameOver) {
     const winner = storage.players.get(ws.playerIndex);
     if (winner) {
