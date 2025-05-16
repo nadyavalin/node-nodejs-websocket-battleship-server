@@ -6,7 +6,10 @@ import {
   WebSocketResponseGeneric,
   AddShipsMessage,
   GenericResult,
+  StartGameResult,
+  TurnResult,
 } from '../../utils/types';
+import { broadcastRooms } from '../broadcast';
 
 export function handleAddShips(
   wss: WebSocketServer,
@@ -15,6 +18,7 @@ export function handleAddShips(
 ) {
   const data: AddShipsMessage = parsedMessage.data;
 
+  const game = storage.games.get(data.gameId);
   if (!ws.playerIndex) {
     const errorResponse: WebSocketResponse = {
       type: 'error',
@@ -43,7 +47,6 @@ export function handleAddShips(
     return;
   }
 
-  const game = storage.games.get(data.gameId);
   if (!game) {
     const errorResponse: WebSocketResponse = {
       type: 'error',
@@ -74,6 +77,7 @@ export function handleAddShips(
   }
 
   player.ships = data.ships;
+  storage.games.set(data.gameId, game);
 
   const shipsAddedResponse: WebSocketResponse = {
     type: 'ships_added',
@@ -83,8 +87,14 @@ export function handleAddShips(
   ws.send(JSON.stringify(shipsAddedResponse));
   logger.log('ships_added', data, JSON.parse(shipsAddedResponse.data));
 
-  const allShipsPlaced = game.players.length === 2 && game.players.every((p) => p.ships.length > 0);
+  const allShipsPlaced =
+    game.players.length === 2 && game.players.every((p) => p.ships.length >= 10);
+
   if (allShipsPlaced) {
+    const roomId = `room_${data.gameId.split('_')[1]}`;
+    storage.rooms.delete(roomId);
+    broadcastRooms(wss);
+
     game.players.forEach((p) => {
       const playerWs = Array.from(
         wss.clients as Set<WebSocket & { playerIndex: string | null }>
@@ -95,7 +105,7 @@ export function handleAddShips(
           data: JSON.stringify({
             ships: p.ships,
             currentPlayerIndex: game.currentPlayer,
-          }),
+          } as StartGameResult),
           id: parsedMessage.id,
         };
         playerWs.send(JSON.stringify(startGameResponse));
@@ -109,7 +119,7 @@ export function handleAddShips(
           type: 'turn',
           data: JSON.stringify({
             currentPlayer: game.currentPlayer,
-          }),
+          } as TurnResult),
           id: parsedMessage.id,
         };
         playerWs.send(JSON.stringify(turnResponse));
@@ -120,34 +130,5 @@ export function handleAddShips(
         );
       }
     });
-  } else {
-    const startGameResponse: WebSocketResponse = {
-      type: 'start_game',
-      data: JSON.stringify({
-        ships: player.ships,
-        currentPlayerIndex: ws.playerIndex,
-      }),
-      id: parsedMessage.id,
-    };
-    ws.send(JSON.stringify(startGameResponse));
-    logger.log(
-      'start_game',
-      { gameId: game.gameId, playerIndex: ws.playerIndex },
-      JSON.parse(startGameResponse.data)
-    );
-
-    const turnResponse: WebSocketResponse = {
-      type: 'turn',
-      data: JSON.stringify({
-        currentPlayer: ws.playerIndex,
-      }),
-      id: parsedMessage.id,
-    };
-    ws.send(JSON.stringify(turnResponse));
-    logger.log(
-      'turn',
-      { gameId: game.gameId, playerIndex: ws.playerIndex },
-      JSON.parse(turnResponse.data)
-    );
   }
 }

@@ -7,9 +7,25 @@ import {
   AttackMessage,
   GenericResult,
   AttackResult,
-  Ship,
+  TurnResult,
+  FinishResult,
 } from '../../utils/types';
 import { broadcastWinners } from '../broadcast';
+import { processAttack } from '../../utils/attackUtils';
+
+function broadcastToGamePlayers(wss: WebSocketServer, gameId: string, response: WebSocketResponse) {
+  const game = storage.games.get(gameId);
+  if (!game) return;
+
+  game.players.forEach((p) => {
+    const playerWs = Array.from(
+      wss.clients as Set<WebSocket & { playerIndex: string | null }>
+    ).find((client) => client.playerIndex === p.index);
+    if (playerWs && playerWs.readyState === WebSocket.OPEN) {
+      playerWs.send(JSON.stringify(response));
+    }
+  });
+}
 
 export function handleAttack(
   wss: WebSocketServer,
@@ -18,13 +34,15 @@ export function handleAttack(
 ) {
   const data: AttackMessage = parsedMessage.data;
 
+  // Проверка регистрации игрока
   if (!ws.playerIndex) {
+    const error: GenericResult = {
+      error: true,
+      errorText: 'Player not registered',
+    };
     const errorResponse: WebSocketResponse = {
       type: 'error',
-      data: JSON.stringify({
-        error: true,
-        errorText: 'Player not registered',
-      } as GenericResult),
+      data: JSON.stringify(error),
       id: parsedMessage.id,
     };
     ws.send(JSON.stringify(errorResponse));
@@ -32,13 +50,15 @@ export function handleAttack(
     return;
   }
 
+  // Проверка соответствия индекса игрока
   if (ws.playerIndex !== data.indexPlayer) {
+    const error: GenericResult = {
+      error: true,
+      errorText: 'Invalid player index',
+    };
     const errorResponse: WebSocketResponse = {
       type: 'error',
-      data: JSON.stringify({
-        error: true,
-        errorText: 'Invalid player index',
-      } as GenericResult),
+      data: JSON.stringify(error),
       id: parsedMessage.id,
     };
     ws.send(JSON.stringify(errorResponse));
@@ -46,14 +66,16 @@ export function handleAttack(
     return;
   }
 
+  // Проверка существования игры
   const game = storage.games.get(data.gameId);
   if (!game) {
+    const error: GenericResult = {
+      error: true,
+      errorText: 'Game not found',
+    };
     const errorResponse: WebSocketResponse = {
       type: 'error',
-      data: JSON.stringify({
-        error: true,
-        errorText: 'Game not found',
-      } as GenericResult),
+      data: JSON.stringify(error),
       id: parsedMessage.id,
     };
     ws.send(JSON.stringify(errorResponse));
@@ -61,13 +83,15 @@ export function handleAttack(
     return;
   }
 
+  // Проверка, ходит ли текущий игрок
   if (game.currentPlayer !== ws.playerIndex) {
+    const error: GenericResult = {
+      error: true,
+      errorText: 'Not your turn',
+    };
     const errorResponse: WebSocketResponse = {
       type: 'error',
-      data: JSON.stringify({
-        error: true,
-        errorText: 'Not your turn',
-      } as GenericResult),
+      data: JSON.stringify(error),
       id: parsedMessage.id,
     };
     ws.send(JSON.stringify(errorResponse));
@@ -75,14 +99,27 @@ export function handleAttack(
     return;
   }
 
+  // Проверка наличия противника
   const opponent = game.players.find((p) => p.index !== ws.playerIndex);
+  logger.log(
+    'attack_debug',
+    {
+      gameId: data.gameId,
+      gameExists: !!game,
+      currentPlayer: game.currentPlayer,
+      playerIndex: ws.playerIndex,
+      opponentExists: !!opponent,
+    },
+    { status: 'debug' }
+  );
   if (!opponent) {
+    const error: GenericResult = {
+      error: true,
+      errorText: 'Opponent not found',
+    };
     const errorResponse: WebSocketResponse = {
       type: 'error',
-      data: JSON.stringify({
-        error: true,
-        errorText: 'Opponent not found',
-      } as GenericResult),
+      data: JSON.stringify(error),
       id: parsedMessage.id,
     };
     ws.send(JSON.stringify(errorResponse));
@@ -90,24 +127,15 @@ export function handleAttack(
     return;
   }
 
-  let status: AttackResult['status'] = 'miss';
-  let hitShip: Ship | null = null;
+  // Обработка атаки
+  const { status, isGameOver, aroundCells } = processAttack(
+    data.gameId,
+    ws.playerIndex,
+    data.x,
+    data.y
+  );
 
-  for (const ship of opponent.ships) {
-    const { x: shipX, y: shipY } = ship.position;
-    const shipCells: { x: number; y: number }[] = [];
-    for (let i = 0; i < ship.length; i++) {
-      const cellX = ship.direction ? shipX + i : shipX;
-      const cellY = ship.direction ? shipY : shipY + i;
-      shipCells.push({ x: cellX, y: cellY });
-    }
-    if (shipCells.some((cell) => cell.x === data.x && cell.y === data.y)) {
-      status = 'shot';
-      hitShip = ship;
-      break;
-    }
-  }
-
+  // Отправляем результат атаки
   const response: WebSocketResponse = {
     type: 'attack',
     data: JSON.stringify({
@@ -117,105 +145,48 @@ export function handleAttack(
     } as AttackResult),
     id: parsedMessage.id,
   };
-
-  let isGameOver = false;
-  if (status === 'shot' && hitShip) {
-    const hitCells = new Set<string>(
-      game.board.cells.filter((cell) => cell.status === 'shot').map((cell) => `${cell.x},${cell.y}`)
-    );
-    hitCells.add(`${data.x},${data.y}`);
-    const shipCells = [];
-    for (let i = 0; i < hitShip.length; i++) {
-      const cellX = hitShip.direction ? hitShip.position.x + i : hitShip.position.x;
-      const cellY = hitShip.direction ? hitShip.position.y : hitShip.position.y + i;
-      shipCells.push(`${cellX},${cellY}`);
-    }
-    if (shipCells.every((cell) => hitCells.has(cell))) {
-      response.data = JSON.stringify({
-        position: { x: data.x, y: data.y },
-        currentPlayer: ws.playerIndex,
-        status: 'killed',
-      } as AttackResult);
-      const aroundCells = [];
-      for (let i = -1; i <= hitShip.length; i++) {
-        for (let j = -1; j <= 1; j++) {
-          const cellX = hitShip.direction ? hitShip.position.x + i : hitShip.position.x + j;
-          const cellY = hitShip.direction ? hitShip.position.y + j : hitShip.position.y + i;
-          if (
-            cellX >= 0 &&
-            cellX < 10 &&
-            cellY >= 0 &&
-            cellY < 10 &&
-            !shipCells.includes(`${cellX},${cellY}`)
-          ) {
-            aroundCells.push({ x: cellX, y: cellY });
-          }
-        }
-      }
-      aroundCells.forEach((cell) => {
-        const aroundResponse: WebSocketResponse = {
-          type: 'attack',
-          data: JSON.stringify({
-            position: { x: cell.x, y: cell.y },
-            currentPlayer: ws.playerIndex,
-            status: 'miss',
-          } as AttackResult),
-          id: parsedMessage.id,
-        };
-        wss.clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify(aroundResponse));
-          }
-        });
-        game.board.cells.push({ x: cell.x, y: cell.y, status: 'miss' });
-        logger.log('attack', { aroundCell: cell }, JSON.parse(aroundResponse.data));
-      });
-
-      const opponentShipsCells = opponent.ships.flatMap((ship) => {
-        const cells: { x: number; y: number }[] = [];
-        for (let i = 0; i < ship.length; i++) {
-          const cellX = ship.direction ? ship.position.x + i : ship.position.x;
-          const cellY = ship.direction ? ship.position.y : ship.position.y + i;
-          cells.push({ x: cellX, y: cellY });
-        }
-        return cells;
-      });
-      const hitCellsAll = new Set<string>(
-        game.board.cells
-          .filter((cell) => cell.status === 'shot')
-          .map((cell) => `${cell.x},${cell.y}`)
-      );
-      isGameOver = opponentShipsCells.every((cell) => hitCellsAll.has(`${cell.x},${cell.y}`));
-    }
-  }
-
-  game.board.cells.push({ x: data.x, y: data.y, status });
-  storage.games.set(game.gameId, game);
-
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(response));
-    }
-  });
-
+  broadcastToGamePlayers(wss, data.gameId, response);
+  logger.log(
+    'attack_debug',
+    {
+      gameId: data.gameId,
+      attackPosition: { x: data.x, y: data.y },
+      status,
+      boardCells: game.board.cells.length,
+    },
+    { status: 'debug' }
+  );
   logger.log('attack', data, JSON.parse(response.data));
 
+  // Отправляем клетки вокруг уничтоженного корабля
+  aroundCells.forEach((cell) => {
+    const aroundResponse: WebSocketResponse = {
+      type: 'attack',
+      data: JSON.stringify({
+        position: { x: cell.x, y: cell.y },
+        currentPlayer: ws.playerIndex,
+        status: 'miss',
+      } as AttackResult),
+      id: parsedMessage.id,
+    };
+    broadcastToGamePlayers(wss, data.gameId, aroundResponse);
+    logger.log('attack', { aroundCell: cell }, JSON.parse(aroundResponse.data));
+  });
+
+  // Обновляем ход
   const nextPlayer = status === 'miss' ? opponent.index : ws.playerIndex;
   game.currentPlayer = nextPlayer;
   const turnResponse: WebSocketResponse = {
     type: 'turn',
     data: JSON.stringify({
       currentPlayer: nextPlayer,
-    }),
+    } as TurnResult),
     id: parsedMessage.id,
   };
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(turnResponse));
-    }
-  });
+  broadcastToGamePlayers(wss, data.gameId, turnResponse);
   logger.log('turn', { player: nextPlayer }, JSON.parse(turnResponse.data));
 
+  // Обработка конца игры
   if (isGameOver) {
     const winner = storage.players.get(ws.playerIndex);
     if (winner) {
@@ -226,16 +197,12 @@ export function handleAttack(
       type: 'finish',
       data: JSON.stringify({
         winPlayer: ws.playerIndex,
-      }),
+      } as FinishResult),
       id: parsedMessage.id,
     };
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(finishResponse));
-      }
-    });
+    broadcastToGamePlayers(wss, data.gameId, finishResponse);
     logger.log('finish', { winner: ws.playerIndex }, JSON.parse(finishResponse.data));
-    storage.games.delete(game.gameId);
+    storage.games.delete(data.gameId);
     broadcastWinners(wss);
   }
 }

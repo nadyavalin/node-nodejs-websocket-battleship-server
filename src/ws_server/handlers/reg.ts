@@ -3,11 +3,13 @@ import { logger } from '../../utils/logger';
 import { storage } from '../storage';
 import {
   WebSocketResponse,
+  WebSocketResponseGeneric,
   RegMessage,
   RegResponseData,
-  WebSocketResponseGeneric,
+  AddUserToRoomMessage,
 } from '../../utils/types';
-import { broadcastWinners } from '../broadcast';
+import { broadcastWinners, broadcastRooms } from '../broadcast';
+import { handleAddUserToRoom } from './addUserToRoom';
 
 export function handleReg(
   wss: WebSocketServer,
@@ -86,9 +88,36 @@ export function handleReg(
     };
     ws.playerIndex = index;
   }
+
   ws.send(JSON.stringify(response));
   logger.log('reg', data, JSON.parse(response.data) as RegResponseData);
+
   if (!JSON.parse(response.data).error) {
     broadcastWinners(wss);
+    broadcastRooms(wss);
+    const availableRoom = Array.from(storage.rooms.entries()).find(
+      ([, r]) => r.players.length === 1
+    );
+
+    if (availableRoom) {
+      const [roomId] = availableRoom;
+      logger.log(
+        'reg_debug',
+        { autoJoinRoom: roomId, playerIndex: ws.playerIndex },
+        { status: 'debug' }
+      );
+      const addUserMessage: WebSocketResponseGeneric<AddUserToRoomMessage> = {
+        type: 'add_user_to_room',
+        data: { indexRoom: roomId },
+        id: parsedMessage.id,
+      };
+      handleAddUserToRoom(wss, ws, addUserMessage);
+    } else {
+      logger.log(
+        'reg_debug',
+        { noAvailableRoom: true, playerIndex: ws.playerIndex },
+        { status: 'debug' }
+      );
+    }
   }
 }
