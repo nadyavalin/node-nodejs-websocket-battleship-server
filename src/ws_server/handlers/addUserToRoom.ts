@@ -105,11 +105,6 @@ export function handleAddUserToRoom(
         id: parsedMessage.id,
       };
       playerWs.send(JSON.stringify(createGameResponse));
-      logger.log(
-        'add_user_to_room_debug',
-        { createGameResponse: JSON.parse(createGameResponse.data), sentTo: p.index },
-        { status: 'debug' }
-      );
     }
   });
 

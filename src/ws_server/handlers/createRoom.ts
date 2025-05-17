@@ -72,18 +72,7 @@ export function handleCreateRoom(
     return;
   }
 
-  const { roomId, gameId } = createRoomAndGame(ws.playerIndex);
-  logger.log(
-    'create_room_debug',
-    {
-      roomId,
-      gameId,
-      playerIndex: ws.playerIndex,
-      roomPlayers: storage.rooms.get(roomId)!.players,
-      gamePlayers: storage.games.get(gameId)!.players,
-    },
-    { status: 'debug' }
-  );
+  const { gameId } = createRoomAndGame(ws.playerIndex);
 
   const response: WebSocketResponse = {
     type: 'create_game',

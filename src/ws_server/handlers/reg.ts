@@ -101,23 +101,12 @@ export function handleReg(
 
     if (availableRoom) {
       const [roomId] = availableRoom;
-      logger.log(
-        'reg_debug',
-        { autoJoinRoom: roomId, playerIndex: ws.playerIndex },
-        { status: 'debug' }
-      );
       const addUserMessage: WebSocketResponseGeneric<AddUserToRoomMessage> = {
         type: 'add_user_to_room',
         data: { indexRoom: roomId },
         id: parsedMessage.id,
       };
       handleAddUserToRoom(wss, ws, addUserMessage);
-    } else {
-      logger.log(
-        'reg_debug',
-        { noAvailableRoom: true, playerIndex: ws.playerIndex },
-        { status: 'debug' }
-      );
     }
   }
 }

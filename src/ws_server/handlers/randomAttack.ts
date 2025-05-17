@@ -171,19 +171,8 @@ export function handleRandomAttack(
     id: parsedMessage.id,
   };
   broadcastToGamePlayers(wss, data.gameId, response);
-  logger.log(
-    'randomAttack_debug',
-    {
-      gameId: data.gameId,
-      attackPosition: { x, y },
-      status,
-      boardCells: attacker.board.cells.length,
-    },
-    { status: 'debug' }
-  );
 
   if (aroundCells.length > 0) {
-    logger.log('attack_around_start', { gameId: data.gameId, aroundCells }, { status: 'debug' });
     aroundCells.forEach((cell) => {
       const cellExists = attacker.board.cells.some((c) => c.x === cell.x && c.y === cell.y);
       if (!cellExists) {
@@ -198,11 +187,6 @@ export function handleRandomAttack(
           id: parsedMessage.id,
         };
         broadcastToGamePlayers(wss, data.gameId, aroundResponse);
-        logger.log(
-          'attack_around',
-          { gameId: data.gameId, cell, status: 'miss' },
-          { status: 'debug' }
-        );
       }
     });
   }
@@ -291,18 +275,6 @@ export function botAttack(
     logger.log('botAttack_error', { gameId, botIndex, x, y, error }, { status: 'error' });
     return null;
   }
-
-  logger.log(
-    'botAttack_debug',
-    {
-      gameId,
-      botIndex,
-      attackPosition: { x, y },
-      status,
-      boardCells: attacker.board.cells.length,
-    },
-    { status: 'debug' }
-  );
 
   return { x, y, status, isGameOver, aroundCells };
 }

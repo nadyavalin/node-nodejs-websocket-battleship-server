@@ -31,18 +31,7 @@ export function handleConnection(wss: WebSocketServer, ws: WebSocket) {
 
   ws.on('message', (message: string) => {
     try {
-      logger.log(
-        'raw_message_received',
-        { message, messageLength: message.length },
-        { status: 'debug' }
-      );
       const parsedMessage = JSON.parse(message);
-
-      logger.log(
-        'raw_message',
-        { message, type: parsedMessage.type, typeTrimmed: parsedMessage.type.trim() },
-        { status: 'debug' }
-      );
 
       let data = parsedMessage.data;
 
@@ -51,17 +40,7 @@ export function handleConnection(wss: WebSocketServer, ws: WebSocket) {
         if (typeof parsedMessage.data === 'string' && parsedMessage.data !== '') {
           try {
             data = JSON.parse(parsedMessage.data);
-            logger.log(
-              'data_parsed',
-              { parsedData: data, rawData: parsedMessage.data },
-              { status: 'debug' }
-            );
           } catch (e) {
-            logger.log(
-              'error',
-              { message: 'Failed to parse data', rawData: parsedMessage.data },
-              { error: (e as Error).message }
-            );
             throw e;
           }
         } else if (typeof parsedMessage.data === 'object' && parsedMessage.data !== null) {

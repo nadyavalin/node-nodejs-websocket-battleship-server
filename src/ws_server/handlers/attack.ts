@@ -144,19 +144,8 @@ export function handleAttack(
     id: parsedMessage.id,
   };
   broadcastToGamePlayers(wss, data.gameId, response);
-  logger.log(
-    'attack_debug',
-    {
-      gameId: data.gameId,
-      attackPosition: { x: data.x, y: data.y },
-      status,
-      boardCells: attacker.board.cells.length,
-    },
-    { status: 'debug' }
-  );
 
   if (aroundCells.length > 0) {
-    logger.log('attack_around_start', { gameId: data.gameId, aroundCells }, { status: 'debug' });
     aroundCells.forEach((cell) => {
       const cellExists = attacker.board.cells.some((c) => c.x === cell.x && c.y === cell.y);
       if (!cellExists) {
@@ -171,11 +160,6 @@ export function handleAttack(
           id: parsedMessage.id,
         };
         broadcastToGamePlayers(wss, data.gameId, aroundResponse);
-        logger.log(
-          'attack_around',
-          { gameId: data.gameId, cell, status: 'miss' },
-          { status: 'debug' }
-        );
       }
     });
   }
@@ -209,7 +193,6 @@ export function handleAttack(
     };
     broadcastToGamePlayers(wss, data.gameId, finishResponse);
     storage.games.delete(data.gameId);
-
     const botIndex = game.players.find((p) => p.index.startsWith('bot_'))?.index;
     if (botIndex) {
       storage.players.delete(botIndex);
@@ -235,11 +218,6 @@ export function handleAttack(
           broadcastToGamePlayers(wss, data.gameId, botResponse);
 
           if (botAttackResult.aroundCells.length > 0) {
-            logger.log(
-              'attack_around_start',
-              { gameId: data.gameId, aroundCells: botAttackResult.aroundCells },
-              { status: 'debug' }
-            );
             botAttackResult.aroundCells.forEach((cell) => {
               const cellExists = opponent.board.cells.some((c) => c.x === cell.x && c.y === cell.y);
               if (!cellExists) {
@@ -254,11 +232,6 @@ export function handleAttack(
                   id: parsedMessage.id,
                 };
                 broadcastToGamePlayers(wss, data.gameId, aroundResponse);
-                logger.log(
-                  'attack_around',
-                  { gameId: data.gameId, cell, status: 'miss' },
-                  { status: 'debug' }
-                );
               }
             });
           }
