@@ -77,6 +77,7 @@ export function handleAddShips(
   }
 
   player.ships = data.ships;
+  player.board = { cells: [] };
   storage.games.set(data.gameId, game);
 
   const shipsAddedResponse: WebSocketResponse = {
@@ -128,7 +129,7 @@ export function handleAddShips(
         };
         playerWs.send(JSON.stringify(turnResponse));
         logger.log(
-          'turn',
+          'turn redirect',
           { gameId: game.gameId, playerIndex: p.index },
           JSON.parse(turnResponse.data)
         );

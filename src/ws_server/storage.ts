@@ -1,4 +1,4 @@
-import { Ship } from '../utils/types';
+import { GamePlayer } from '../utils/types';
 
 interface Player {
   name: string;
@@ -12,16 +12,10 @@ interface Room {
   players: Player[];
 }
 
-interface GamePlayer {
-  index: string;
-  ships: Ship[];
-}
-
 export interface Game {
   gameId: string;
   players: GamePlayer[];
   currentPlayer: string;
-  board: { cells: { x: number; y: number; status: 'miss' | 'shot' | 'killed' }[] };
 }
 
 export const storage = {

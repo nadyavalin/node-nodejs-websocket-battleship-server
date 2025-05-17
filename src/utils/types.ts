@@ -101,6 +101,12 @@ export interface Ship {
   type: 'small' | 'medium' | 'large' | 'huge';
 }
 
+export interface Cell {
+  x: number;
+  y: number;
+  status: 'miss' | 'shot' | 'killed';
+}
+
 export interface AddShipsData {
   gameId: string;
   ships: Ship[];
@@ -136,4 +142,10 @@ export interface TurnResult {
 
 export interface FinishResult {
   winPlayer: string;
+}
+
+export interface GamePlayer {
+  index: string;
+  ships: Ship[];
+  board: { cells: Cell[] };
 }

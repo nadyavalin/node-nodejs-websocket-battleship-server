@@ -23,8 +23,8 @@ export function getAroundCells(ship: Ship): { x: number; y: number }[] {
 
   for (let i = -1; i <= rangeX; i++) {
     for (let j = -1; j <= rangeY; j++) {
-      const cellX = ship.direction ? shipX + j : shipX + i;
-      const cellY = ship.direction ? shipY + i : shipY + j;
+      const cellX = ship.direction ? shipX + i : shipX + j;
+      const cellY = ship.direction ? shipY + j : shipY + i;
       if (
         cellX >= 0 &&
         cellX < 10 &&
@@ -56,10 +56,20 @@ export function processAttack(
     return { status: 'miss', isGameOver: false, aroundCells: [], error: 'Game not found' };
   }
 
+  const attacker = game.players.find((p) => p.index === playerIndex);
   const opponent = game.players.find((p) => p.index !== playerIndex);
-  if (!opponent) {
-    logger.log('attack_error', { gameId, x, y, error: 'Opponent not found' }, { status: 'error' });
-    return { status: 'miss', isGameOver: false, aroundCells: [], error: 'Opponent not found' };
+  if (!attacker || !opponent) {
+    logger.log(
+      'attack_error',
+      { gameId, x, y, error: 'Player or opponent not found' },
+      { status: 'error' }
+    );
+    return {
+      status: 'miss',
+      isGameOver: false,
+      aroundCells: [],
+      error: 'Player or opponent not found',
+    };
   }
 
   if (x < 0 || x >= 10 || y < 0 || y >= 10) {
@@ -71,7 +81,10 @@ export function processAttack(
     return { status: 'miss', isGameOver: false, aroundCells: [], error: 'Attack out of bounds' };
   }
 
-  const existingCell = game.board.cells.find((cell) => cell.x === x && cell.y === y);
+  if (!attacker.board) {
+    attacker.board = { cells: [] };
+  }
+  const existingCell = attacker.board.cells.find((cell) => cell.x === x && cell.y === y);
   if (existingCell) {
     logger.log(
       'attack_error',
@@ -106,13 +119,14 @@ export function processAttack(
     }
   }
 
-  game.board.cells.push({ x, y, status });
+  attacker.board.cells.push({ x, y, status });
 
   if (hitShip && status === 'shot') {
     const shipCells = getShipCells(hitShip);
     const shipCellKeys = shipCells.map((cell) => `${cell.x},${cell.y}`);
+
     const allShipCellsHit = shipCellKeys.every((cellKey) =>
-      game.board.cells.some(
+      attacker.board.cells.some(
         (cell) =>
           `${cell.x},${cell.y}` === cellKey && (cell.status === 'shot' || cell.status === 'killed')
       )
@@ -121,13 +135,13 @@ export function processAttack(
     if (allShipCellsHit) {
       status = 'killed';
       shipCells.forEach((shipCell) => {
-        const cellIndex = game.board.cells.findIndex(
+        const cellIndex = attacker.board.cells.findIndex(
           (c) => c.x === shipCell.x && c.y === shipCell.y
         );
         if (cellIndex !== -1) {
-          game.board.cells[cellIndex].status = 'killed';
+          attacker.board.cells[cellIndex].status = 'killed';
         } else {
-          game.board.cells.push({ x: shipCell.x, y: shipCell.y, status: 'killed' });
+          attacker.board.cells.push({ x: shipCell.x, y: shipCell.y, status: 'killed' });
         }
       });
     }
@@ -148,7 +162,11 @@ export function processAttack(
             direction: hitShip.direction,
           }
         : null,
-      boardCells: game.board.cells.map((cell) => ({ x: cell.x, y: cell.y, status: cell.status })),
+      boardCells: attacker.board.cells.map((cell) => ({
+        x: cell.x,
+        y: cell.y,
+        status: cell.status,
+      })),
       opponentShips: opponent.ships.map((ship) => ({
         type: ship.type,
         position: ship.position,
@@ -163,7 +181,7 @@ export function processAttack(
   const allShipsKilled = opponent.ships.every((ship) => {
     const shipCells = getShipCells(ship).map((cell) => `${cell.x},${cell.y}`);
     return shipCells.every((cell) =>
-      game.board.cells.some(
+      attacker.board.cells.some(
         (c) => `${c.x},${c.y}` === cell && (c.status === 'shot' || c.status === 'killed')
       )
     );

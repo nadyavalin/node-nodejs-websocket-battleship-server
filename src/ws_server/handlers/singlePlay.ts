@@ -9,6 +9,7 @@ import {
   CreateGameResult,
   Ship,
   StartGameResult,
+  TurnResult,
 } from '../../utils/types';
 import { broadcastRooms } from '../broadcast';
 
@@ -64,9 +65,8 @@ export function handleSinglePlay(
   const gameId = `game_${storage.games.size + 1}`;
   const game: Game = {
     gameId,
-    players: [{ index: ws.playerIndex, ships: [] }],
+    players: [{ index: ws.playerIndex, ships: [], board: { cells: [] } }],
     currentPlayer: ws.playerIndex,
-    board: { cells: [] },
   };
   storage.games.set(gameId, game);
 
@@ -80,7 +80,7 @@ export function handleSinglePlay(
   storage.players.set(botIndex, bot);
   room.players.push(bot);
   storage.rooms.set(roomId, room);
-  game.players.push({ index: botIndex, ships: [] });
+  game.players.push({ index: botIndex, ships: [], board: { cells: [] } });
   storage.games.set(gameId, game);
 
   const botShips: Ship[] = generateBotShips();
@@ -131,11 +131,11 @@ export function handleSinglePlay(
     type: 'turn',
     data: JSON.stringify({
       currentPlayer: ws.playerIndex,
-    }),
+    } as TurnResult),
     id: parsedMessage.id,
   };
   ws.send(JSON.stringify(turnResponse));
-  logger.log('turn', { player: ws.playerIndex }, JSON.parse(turnResponse.data));
+  logger.log('turn redirect', { player: ws.playerIndex }, JSON.parse(turnResponse.data));
 }
 
 function generateBotShips(): Ship[] {
@@ -155,16 +155,16 @@ function generateBotShips(): Ship[] {
         const direction = Math.random() > 0.5;
         const x = Math.floor(Math.random() * 10);
         const y = Math.floor(Math.random() * 10);
-        const endX = direction ? x + config.length - 1 : x;
-        const endY = direction ? y : y + config.length - 1;
+        const endX = direction ? x : x + config.length - 1;
+        const endY = direction ? y + config.length - 1 : y;
 
         if (x < 0 || y < 0 || endX >= 10 || endY >= 10) continue;
 
         let valid = true;
         const cells: string[] = [];
         for (let j = 0; j < config.length; j++) {
-          const cellX = direction ? x + j : x;
-          const cellY = direction ? y : y + j;
+          const cellX = direction ? x : x + j;
+          const cellY = direction ? y + j : y;
           const cellKey = `${cellX},${cellY}`;
           if (occupiedCells.has(cellKey)) {
             valid = false;

@@ -88,7 +88,7 @@ export function handleAddUserToRoom(
   room.players.push(player!);
   storage.rooms.set(data.indexRoom, room);
 
-  game.players.push({ index: ws.playerIndex!, ships: [] });
+  game.players.push({ index: ws.playerIndex!, ships: [], board: { cells: [] } });
   storage.games.set(game.gameId, game);
 
   game.players.forEach((p) => {

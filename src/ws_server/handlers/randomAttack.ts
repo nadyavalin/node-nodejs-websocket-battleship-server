@@ -95,11 +95,12 @@ export function handleRandomAttack(
     return;
   }
 
+  const attacker = game.players.find((p) => p.index === ws.playerIndex);
   const opponent = game.players.find((p) => p.index !== ws.playerIndex);
-  if (!opponent) {
+  if (!attacker || !opponent) {
     const error: GenericResult = {
       error: true,
-      errorText: 'Opponent not found',
+      errorText: 'Player or opponent not found',
     };
     const errorResponse: WebSocketResponse = {
       type: 'error',
@@ -111,10 +112,13 @@ export function handleRandomAttack(
     return;
   }
 
+  if (!attacker.board) {
+    attacker.board = { cells: [] };
+  }
   const availableCells = [];
   for (let x = 0; x < 10; x++) {
     for (let y = 0; y < 10; y++) {
-      if (!game.board.cells.some((cell) => cell.x === x && cell.y === y)) {
+      if (!attacker.board.cells.some((cell) => cell.x === x && cell.y === y)) {
         availableCells.push({ x, y });
       }
     }
@@ -173,7 +177,7 @@ export function handleRandomAttack(
       gameId: data.gameId,
       attackPosition: { x, y },
       status,
-      boardCells: game.board.cells.length,
+      boardCells: attacker.board.cells.length,
     },
     { status: 'debug' }
   );
@@ -181,9 +185,9 @@ export function handleRandomAttack(
   if (aroundCells.length > 0) {
     logger.log('attack_around_start', { gameId: data.gameId, aroundCells }, { status: 'debug' });
     aroundCells.forEach((cell) => {
-      const cellExists = game.board.cells.some((c) => c.x === cell.x && c.y === cell.y);
+      const cellExists = attacker.board.cells.some((c) => c.x === cell.x && c.y === cell.y);
       if (!cellExists) {
-        game.board.cells.push({ x: cell.x, y: cell.y, status: 'miss' });
+        attacker.board.cells.push({ x: cell.x, y: cell.y, status: 'miss' });
         const aroundResponse: WebSocketResponse = {
           type: 'attack',
           data: JSON.stringify({
@@ -213,7 +217,7 @@ export function handleRandomAttack(
     id: parsedMessage.id,
   };
   broadcastToGamePlayers(wss, data.gameId, turnResponse);
-  logger.log('turn', { player: nextPlayer }, JSON.parse(turnResponse.data));
+  logger.log('turn redirect', { player: nextPlayer }, JSON.parse(turnResponse.data));
 
   if (isGameOver) {
     const winner = storage.players.get(ws.playerIndex);

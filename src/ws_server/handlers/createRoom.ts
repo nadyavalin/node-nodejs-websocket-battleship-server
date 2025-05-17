@@ -22,9 +22,8 @@ function createRoomAndGame(playerIndex: string) {
   const gameId = `game_${storage.games.size + 1}`;
   const game = {
     gameId,
-    players: [{ index: playerIndex, ships: [] }],
+    players: [{ index: playerIndex, ships: [], board: { cells: [] } }],
     currentPlayer: playerIndex,
-    board: { cells: [] },
   };
   storage.games.set(gameId, game);
 
