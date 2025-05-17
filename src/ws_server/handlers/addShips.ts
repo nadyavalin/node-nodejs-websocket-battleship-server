@@ -85,10 +85,14 @@ export function handleAddShips(
     id: parsedMessage.id,
   };
   ws.send(JSON.stringify(shipsAddedResponse));
-  logger.log('ships_added', data, JSON.parse(shipsAddedResponse.data));
+  logger.log(
+    'ships_added',
+    { gameId: data.gameId, playerIndex: ws.playerIndex, ships: data.ships },
+    JSON.parse(shipsAddedResponse.data)
+  );
 
   const allShipsPlaced =
-    game.players.length === 2 && game.players.every((p) => p.ships.length >= 10);
+    game.players.length === 2 && game.players.every((p) => p.ships && p.ships.length >= 1);
 
   if (allShipsPlaced) {
     const roomId = `room_${data.gameId.split('_')[1]}`;

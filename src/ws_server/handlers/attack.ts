@@ -111,12 +111,26 @@ export function handleAttack(
     return;
   }
 
-  const { status, isGameOver, aroundCells } = processAttack(
+  const { status, isGameOver, aroundCells, error } = processAttack(
     data.gameId,
     ws.playerIndex,
     data.x,
     data.y
   );
+
+  if (error) {
+    const errorResponse: WebSocketResponse = {
+      type: 'error',
+      data: JSON.stringify({
+        error: true,
+        errorText: error,
+      } as GenericResult),
+      id: parsedMessage.id,
+    };
+    ws.send(JSON.stringify(errorResponse));
+    logger.log('attack', data, JSON.parse(errorResponse.data));
+    return;
+  }
 
   const response: WebSocketResponse = {
     type: 'attack',
@@ -139,18 +153,30 @@ export function handleAttack(
     { status: 'debug' }
   );
 
-  aroundCells.forEach((cell) => {
-    const aroundResponse: WebSocketResponse = {
-      type: 'attack',
-      data: JSON.stringify({
-        position: { x: cell.x, y: cell.y },
-        currentPlayer: ws.playerIndex,
-        status: 'miss',
-      } as AttackResult),
-      id: parsedMessage.id,
-    };
-    broadcastToGamePlayers(wss, data.gameId, aroundResponse);
-  });
+  if (aroundCells.length > 0) {
+    logger.log('attack_around_start', { gameId: data.gameId, aroundCells }, { status: 'debug' });
+    aroundCells.forEach((cell) => {
+      const cellExists = game.board.cells.some((c) => c.x === cell.x && c.y === cell.y);
+      if (!cellExists) {
+        game.board.cells.push({ x: cell.x, y: cell.y, status: 'miss' });
+        const aroundResponse: WebSocketResponse = {
+          type: 'attack',
+          data: JSON.stringify({
+            position: { x: cell.x, y: cell.y },
+            currentPlayer: ws.playerIndex,
+            status: 'miss',
+          } as AttackResult),
+          id: parsedMessage.id,
+        };
+        broadcastToGamePlayers(wss, data.gameId, aroundResponse);
+        logger.log(
+          'attack_around',
+          { gameId: data.gameId, cell, status: 'miss' },
+          { status: 'debug' }
+        );
+      }
+    });
+  }
 
   const nextPlayer = status === 'miss' ? opponent.index : ws.playerIndex;
   game.currentPlayer = nextPlayer;

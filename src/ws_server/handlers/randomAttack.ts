@@ -123,7 +123,7 @@ export function handleRandomAttack(
   if (availableCells.length === 0) {
     const error: GenericResult = {
       error: true,
-      errorText: 'No available cells to attack',
+      errorText: 'No available cells for random attack',
     };
     const errorResponse: WebSocketResponse = {
       type: 'error',
@@ -135,19 +135,32 @@ export function handleRandomAttack(
     return;
   }
 
-  const randomCell = availableCells[Math.floor(Math.random() * availableCells.length)];
-
-  const { status, isGameOver, aroundCells } = processAttack(
+  const { x, y } = availableCells[Math.floor(Math.random() * availableCells.length)];
+  const { status, isGameOver, aroundCells, error } = processAttack(
     data.gameId,
     ws.playerIndex,
-    randomCell.x,
-    randomCell.y
+    x,
+    y
   );
+
+  if (error) {
+    const errorResponse: WebSocketResponse = {
+      type: 'error',
+      data: JSON.stringify({
+        error: true,
+        errorText: error,
+      } as GenericResult),
+      id: parsedMessage.id,
+    };
+    ws.send(JSON.stringify(errorResponse));
+    logger.log('randomAttack', data, JSON.parse(errorResponse.data));
+    return;
+  }
 
   const response: WebSocketResponse = {
     type: 'attack',
     data: JSON.stringify({
-      position: { x: randomCell.x, y: randomCell.y },
+      position: { x, y },
       currentPlayer: ws.playerIndex,
       status,
     } as AttackResult),
@@ -158,27 +171,37 @@ export function handleRandomAttack(
     'randomAttack_debug',
     {
       gameId: data.gameId,
-      attackPosition: { x: randomCell.x, y: randomCell.y },
+      attackPosition: { x, y },
       status,
       boardCells: game.board.cells.length,
     },
     { status: 'debug' }
   );
-  logger.log('randomAttack', data, JSON.parse(response.data));
 
-  aroundCells.forEach((cell) => {
-    const aroundResponse: WebSocketResponse = {
-      type: 'attack',
-      data: JSON.stringify({
-        position: { x: cell.x, y: cell.y },
-        currentPlayer: ws.playerIndex,
-        status: 'miss',
-      } as AttackResult),
-      id: parsedMessage.id,
-    };
-    broadcastToGamePlayers(wss, data.gameId, aroundResponse);
-    logger.log('randomAttack', { aroundCell: cell }, JSON.parse(aroundResponse.data));
-  });
+  if (aroundCells.length > 0) {
+    logger.log('attack_around_start', { gameId: data.gameId, aroundCells }, { status: 'debug' });
+    aroundCells.forEach((cell) => {
+      const cellExists = game.board.cells.some((c) => c.x === cell.x && c.y === cell.y);
+      if (!cellExists) {
+        game.board.cells.push({ x: cell.x, y: cell.y, status: 'miss' });
+        const aroundResponse: WebSocketResponse = {
+          type: 'attack',
+          data: JSON.stringify({
+            position: { x: cell.x, y: cell.y },
+            currentPlayer: ws.playerIndex,
+            status: 'miss',
+          } as AttackResult),
+          id: parsedMessage.id,
+        };
+        broadcastToGamePlayers(wss, data.gameId, aroundResponse);
+        logger.log(
+          'attack_around',
+          { gameId: data.gameId, cell, status: 'miss' },
+          { status: 'debug' }
+        );
+      }
+    });
+  }
 
   const nextPlayer = status === 'miss' ? opponent.index : ws.playerIndex;
   game.currentPlayer = nextPlayer;
@@ -200,13 +223,10 @@ export function handleRandomAttack(
     }
     const finishResponse: WebSocketResponse = {
       type: 'finish',
-      data: JSON.stringify({
-        winPlayer: ws.playerIndex,
-      } as FinishResult),
+      data: JSON.stringify({ winPlayer: ws.playerIndex } as FinishResult),
       id: parsedMessage.id,
     };
     broadcastToGamePlayers(wss, data.gameId, finishResponse);
-    logger.log('finish', { winner: ws.playerIndex }, JSON.parse(finishResponse.data));
     storage.games.delete(data.gameId);
     broadcastWinners(wss);
   }

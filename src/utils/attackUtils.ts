@@ -1,29 +1,30 @@
 import { storage } from '../ws_server/storage';
 import { Ship } from './types';
+import { logger } from '../utils/logger';
 
 export function getShipCells(ship: Ship): { x: number; y: number }[] {
   const { x: shipX, y: shipY } = ship.position;
   const cells: { x: number; y: number }[] = [];
   for (let i = 0; i < ship.length; i++) {
-    const cellX = ship.direction ? shipX + i : shipX;
-    const cellY = ship.direction ? shipY : shipY + i;
+    const cellX = ship.direction ? shipX : shipX + i;
+    const cellY = ship.direction ? shipY + i : shipY;
     cells.push({ x: cellX, y: cellY });
   }
   return cells;
 }
 
 export function getAroundCells(ship: Ship): { x: number; y: number }[] {
-  const { x: shipX, y: shipY } = ship.position;
   const shipCells = getShipCells(ship);
   const aroundCells: { x: number; y: number }[] = [];
+  const rangeX = ship.direction ? 1 : ship.length;
+  const rangeY = ship.direction ? ship.length : 1;
+  const shipX = ship.position.x;
+  const shipY = ship.position.y;
 
-  const range = ship.direction ? ship.length : 1;
-  const rangeY = ship.direction ? 1 : ship.length;
-
-  for (let i = -1; i <= range; i++) {
+  for (let i = -1; i <= rangeX; i++) {
     for (let j = -1; j <= rangeY; j++) {
-      const cellX = ship.direction ? shipX + i : shipX + j;
-      const cellY = ship.direction ? shipY + j : shipY + i;
+      const cellX = ship.direction ? shipX + j : shipX + i;
+      const cellY = ship.direction ? shipY + i : shipY + j;
       if (
         cellX >= 0 &&
         cellX < 10 &&
@@ -47,15 +48,48 @@ export function processAttack(
   status: 'miss' | 'shot' | 'killed';
   isGameOver: boolean;
   aroundCells: { x: number; y: number }[];
+  error?: string;
 } {
   const game = storage.games.get(gameId);
   if (!game) {
-    return { status: 'miss', isGameOver: false, aroundCells: [] };
+    logger.log('attack_error', { gameId, x, y, error: 'Game not found' }, { status: 'error' });
+    return { status: 'miss', isGameOver: false, aroundCells: [], error: 'Game not found' };
   }
 
   const opponent = game.players.find((p) => p.index !== playerIndex);
   if (!opponent) {
-    return { status: 'miss', isGameOver: false, aroundCells: [] };
+    logger.log('attack_error', { gameId, x, y, error: 'Opponent not found' }, { status: 'error' });
+    return { status: 'miss', isGameOver: false, aroundCells: [], error: 'Opponent not found' };
+  }
+
+  if (x < 0 || x >= 10 || y < 0 || y >= 10) {
+    logger.log(
+      'attack_error',
+      { gameId, x, y, error: 'Attack out of bounds' },
+      { status: 'error' }
+    );
+    return { status: 'miss', isGameOver: false, aroundCells: [], error: 'Attack out of bounds' };
+  }
+
+  const existingCell = game.board.cells.find((cell) => cell.x === x && cell.y === y);
+  if (existingCell) {
+    logger.log(
+      'attack_error',
+      {
+        gameId,
+        x,
+        y,
+        error: 'Cell already attacked',
+        existingStatus: existingCell.status,
+      },
+      { status: 'error' }
+    );
+    return {
+      status: 'miss',
+      isGameOver: false,
+      aroundCells: [],
+      error: 'Cell already attacked',
+    };
   }
 
   const currentHitKey = `${x},${y}`;
@@ -63,27 +97,20 @@ export function processAttack(
   let hitShip: Ship | null = null;
 
   for (const ship of opponent.ships) {
-    const shipCells = getShipCells(ship).map((cell) => `${cell.x},${cell.y}`);
-    if (shipCells.includes(currentHitKey)) {
+    const shipCells = getShipCells(ship);
+    const shipCellKeys = shipCells.map((cell) => `${cell.x},${cell.y}`);
+    if (shipCellKeys.includes(currentHitKey)) {
       hitShip = ship;
       status = 'shot';
       break;
     }
   }
 
-  const existingCellIndex = game.board.cells.findIndex((cell) => cell.x === x && cell.y === y);
-  const isNewAttack = existingCellIndex === -1;
+  game.board.cells.push({ x, y, status });
 
-  if (!isNewAttack) {
-    status = game.board.cells[existingCellIndex].status;
-  } else {
-    game.board.cells.push({ x, y, status });
-  }
-
-  if (hitShip && isNewAttack && status === 'shot') {
+  if (hitShip && status === 'shot') {
     const shipCells = getShipCells(hitShip);
     const shipCellKeys = shipCells.map((cell) => `${cell.x},${cell.y}`);
-
     const allShipCellsHit = shipCellKeys.every((cellKey) =>
       game.board.cells.some(
         (cell) =>
@@ -99,19 +126,45 @@ export function processAttack(
         );
         if (cellIndex !== -1) {
           game.board.cells[cellIndex].status = 'killed';
+        } else {
+          game.board.cells.push({ x: shipCell.x, y: shipCell.y, status: 'killed' });
         }
       });
     }
   }
 
+  logger.log(
+    'attack_debug',
+    {
+      gameId,
+      playerIndex,
+      attack: { x, y },
+      status,
+      hitShip: hitShip
+        ? {
+            type: hitShip.type,
+            position: hitShip.position,
+            length: hitShip.length,
+            direction: hitShip.direction,
+          }
+        : null,
+      boardCells: game.board.cells.map((cell) => ({ x: cell.x, y: cell.y, status: cell.status })),
+      opponentShips: opponent.ships.map((ship) => ({
+        type: ship.type,
+        position: ship.position,
+        length: ship.length,
+        direction: ship.direction,
+        cells: getShipCells(ship),
+      })),
+    },
+    { status: 'debug' }
+  );
+
   const allShipsKilled = opponent.ships.every((ship) => {
-    const shipCells = getShipCells(ship);
-    return shipCells.every((shipCell) =>
+    const shipCells = getShipCells(ship).map((cell) => `${cell.x},${cell.y}`);
+    return shipCells.every((cell) =>
       game.board.cells.some(
-        (cell) =>
-          cell.x === shipCell.x &&
-          cell.y === shipCell.y &&
-          (cell.status === 'shot' || cell.status === 'killed')
+        (c) => `${c.x},${c.y}` === cell && (c.status === 'shot' || c.status === 'killed')
       )
     );
   });
