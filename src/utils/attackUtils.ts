@@ -150,38 +150,6 @@ export function processAttack(
     }
   }
 
-  // Логирование для отладки
-  logger.log(
-    'attack_debug',
-    {
-      gameId,
-      playerIndex,
-      attack: { x, y },
-      status,
-      hitShip: hitShip
-        ? {
-            type: hitShip.type,
-            position: hitShip.position,
-            length: hitShip.length,
-            direction: hitShip.direction,
-          }
-        : null,
-      boardCells: attacker.board.cells.map((cell) => ({
-        x: cell.x,
-        y: cell.y,
-        status: cell.status,
-      })),
-      opponentShips: opponent.ships.map((ship) => ({
-        type: ship.type,
-        position: ship.position,
-        length: ship.length,
-        direction: ship.direction,
-        cells: getShipCells(ship),
-      })),
-    },
-    { status: 'debug' }
-  );
-
   const allShipsKilled = opponent.ships.every((ship) => {
     const shipCells = getShipCells(ship).map((cell) => `${cell.x},${cell.y}`);
     return shipCells.every((cell) =>

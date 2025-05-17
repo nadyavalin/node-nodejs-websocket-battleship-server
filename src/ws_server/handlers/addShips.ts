@@ -18,7 +18,6 @@ export function handleAddShips(
 ) {
   const data: AddShipsMessage = parsedMessage.data;
 
-  const game = storage.games.get(data.gameId);
   if (!ws.playerIndex) {
     const errorResponse: WebSocketResponse = {
       type: 'error',
@@ -47,6 +46,7 @@ export function handleAddShips(
     return;
   }
 
+  const game = storage.games.get(data.gameId);
   if (!game) {
     const errorResponse: WebSocketResponse = {
       type: 'error',
@@ -76,13 +76,158 @@ export function handleAddShips(
     return;
   }
 
+  const expectedShips = [
+    { length: 4, count: 1 },
+    { length: 3, count: 2 },
+    { length: 2, count: 3 },
+    { length: 1, count: 4 },
+  ];
+  const shipCounts: { [key: number]: number } = {};
+  const occupiedCells = new Set<string>();
+  const tempCells: { x: number; y: number }[] = [];
+
+  for (const ship of data.ships) {
+    const { x, y } = ship.position;
+    const length = ship.length;
+    const direction = ship.direction;
+    const endX = direction ? x : x + length - 1;
+    const endY = direction ? y + length - 1 : y;
+
+    if (x < 0 || y < 0 || endX >= 10 || endY >= 10) {
+      const errorResponse: WebSocketResponse = {
+        type: 'error',
+        data: JSON.stringify({
+          error: true,
+          errorText: `Invalid ship position: ${JSON.stringify(ship)}`,
+        } as GenericResult),
+        id: parsedMessage.id,
+      };
+      ws.send(JSON.stringify(errorResponse));
+      logger.log('add_ships', data, JSON.parse(errorResponse.data));
+      return;
+    }
+
+    if (![1, 2, 3, 4].includes(length)) {
+      const errorResponse: WebSocketResponse = {
+        type: 'error',
+        data: JSON.stringify({
+          error: true,
+          errorText: `Invalid ship length: ${length}`,
+        } as GenericResult),
+        id: parsedMessage.id,
+      };
+      ws.send(JSON.stringify(errorResponse));
+      logger.log('add_ships', data, JSON.parse(errorResponse.data));
+      return;
+    }
+
+    shipCounts[length] = (shipCounts[length] || 0) + 1;
+
+    tempCells.length = 0;
+    for (let j = 0; j < length; j++) {
+      const cellX = direction ? x : x + j;
+      const cellY = direction ? y + j : y;
+      tempCells.push({ x: cellX, y: cellY });
+    }
+
+    for (const cell of tempCells) {
+      const cellKey = `${cell.x},${cell.y}`;
+      if (occupiedCells.has(cellKey)) {
+        const errorResponse: WebSocketResponse = {
+          type: 'error',
+          data: JSON.stringify({
+            error: true,
+            errorText: `Ship overlap at ${cellKey}`,
+          } as GenericResult),
+          id: parsedMessage.id,
+        };
+        ws.send(JSON.stringify(errorResponse));
+        logger.log('add_ships', data, JSON.parse(errorResponse.data));
+        return;
+      }
+    }
+
+    for (const cell of tempCells) {
+      occupiedCells.add(`${cell.x},${cell.y}`);
+    }
+  }
+
+  for (const expected of expectedShips) {
+    if ((shipCounts[expected.length] || 0) !== expected.count) {
+      const errorResponse: WebSocketResponse = {
+        type: 'error',
+        data: JSON.stringify({
+          error: true,
+          errorText: `Invalid number of ships with length ${expected.length}: expected ${expected.count}, got ${shipCounts[expected.length] || 0}`,
+        } as GenericResult),
+        id: parsedMessage.id,
+      };
+      ws.send(JSON.stringify(errorResponse));
+      logger.log('add_ships', data, JSON.parse(errorResponse.data));
+      return;
+    }
+  }
+
+  for (const ship of data.ships) {
+    const { x, y } = ship.position;
+    const length = ship.length;
+    const direction = ship.direction;
+    tempCells.length = 0;
+
+    for (let j = 0; j < length; j++) {
+      const cellX = direction ? x : x + j;
+      const cellY = direction ? y + j : y;
+      tempCells.push({ x: cellX, y: cellY });
+    }
+
+    for (const cell of tempCells) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          if (dx === 0 && dy === 0) continue;
+          const neighborX = cell.x + dx;
+          const neighborY = cell.y + dy;
+          if (neighborX >= 0 && neighborX < 10 && neighborY >= 0 && neighborY < 10) {
+            const neighborKey = `${neighborX},${neighborY}`;
+            let isNeighborOwnCell = false;
+            for (const ownCell of tempCells) {
+              if (ownCell.x === neighborX && ownCell.y === neighborY) {
+                isNeighborOwnCell = true;
+                break;
+              }
+            }
+            if (!isNeighborOwnCell && occupiedCells.has(neighborKey)) {
+              const errorResponse: WebSocketResponse = {
+                type: 'error',
+                data: JSON.stringify({
+                  error: true,
+                  errorText: `Ships too close near ship at (${cell.x},${cell.y})`,
+                } as GenericResult),
+                id: parsedMessage.id,
+              };
+              ws.send(JSON.stringify(errorResponse));
+              logger.log(
+                'add_ships',
+                { ship, conflict: neighborKey },
+                JSON.parse(errorResponse.data)
+              );
+              return;
+            }
+          }
+        }
+      }
+    }
+  }
+
   player.ships = data.ships;
   player.board = { cells: [] };
   storage.games.set(data.gameId, game);
 
   const shipsAddedResponse: WebSocketResponse = {
     type: 'ships_added',
-    data: JSON.stringify({}),
+    data: JSON.stringify({
+      ships: data.ships,
+      playerIndex: ws.playerIndex,
+    }),
     id: parsedMessage.id,
   };
   ws.send(JSON.stringify(shipsAddedResponse));

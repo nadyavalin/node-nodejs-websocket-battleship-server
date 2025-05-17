@@ -235,3 +235,74 @@ export function handleRandomAttack(
     broadcastWinners(wss);
   }
 }
+
+export function botAttack(
+  wss: WebSocketServer,
+  gameId: string,
+  botIndex: string
+): {
+  x: number;
+  y: number;
+  status: 'miss' | 'shot' | 'killed';
+  isGameOver: boolean;
+  aroundCells: { x: number; y: number }[];
+} | null {
+  const game = storage.games.get(gameId);
+  if (!game) {
+    logger.log('botAttack_error', { gameId, error: 'Game not found' }, { status: 'error' });
+    return null;
+  }
+
+  const attacker = game.players.find((p) => p.index === botIndex);
+  if (!attacker) {
+    logger.log(
+      'botAttack_error',
+      { gameId, botIndex, error: 'Bot not found' },
+      { status: 'error' }
+    );
+    return null;
+  }
+
+  if (!attacker.board) {
+    attacker.board = { cells: [] };
+  }
+  const availableCells = [];
+  for (let x = 0; x < 10; x++) {
+    for (let y = 0; y < 10; y++) {
+      if (!attacker.board.cells.some((cell) => cell.x === x && cell.y === y)) {
+        availableCells.push({ x, y });
+      }
+    }
+  }
+
+  if (availableCells.length === 0) {
+    logger.log(
+      'botAttack_error',
+      { gameId, botIndex, error: 'No available cells for bot attack' },
+      { status: 'error' }
+    );
+    return null;
+  }
+
+  const { x, y } = availableCells[Math.floor(Math.random() * availableCells.length)];
+  const { status, isGameOver, aroundCells, error } = processAttack(gameId, botIndex, x, y);
+
+  if (error) {
+    logger.log('botAttack_error', { gameId, botIndex, x, y, error }, { status: 'error' });
+    return null;
+  }
+
+  logger.log(
+    'botAttack_debug',
+    {
+      gameId,
+      botIndex,
+      attackPosition: { x, y },
+      status,
+      boardCells: attacker.board.cells.length,
+    },
+    { status: 'debug' }
+  );
+
+  return { x, y, status, isGameOver, aroundCells };
+}

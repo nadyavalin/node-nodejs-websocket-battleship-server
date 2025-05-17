@@ -12,7 +12,7 @@ export interface RegResponseData {
 
 export interface WebSocketResponse {
   type: string;
-  data: string; // JSON-строка
+  data: string;
   id: number;
 }
 
@@ -96,7 +96,7 @@ export interface Ship {
     x: number;
     y: number;
   };
-  direction: boolean; // true = horizontal, false = vertical
+  direction: boolean;
   length: number;
   type: 'small' | 'medium' | 'large' | 'huge';
 }

@@ -8,11 +8,8 @@ import {
   GenericResult,
   CreateGameResult,
   Ship,
-  StartGameResult,
-  TurnResult,
 } from '../../utils/types';
 import { broadcastRooms } from '../broadcast';
-
 import { Game } from '../storage';
 
 export function handleSinglePlay(
@@ -33,6 +30,17 @@ export function handleSinglePlay(
     logger.log('single_play', {}, JSON.parse(errorResponse.data));
     return;
   }
+
+  Array.from(storage.games.entries()).forEach(([gameId, game]) => {
+    if (game.players.some((p) => p.index === ws.playerIndex)) {
+      storage.games.delete(gameId);
+    }
+  });
+  Array.from(storage.rooms.entries()).forEach(([roomId, room]) => {
+    if (room.players.some((p) => p.index === ws.playerIndex)) {
+      storage.rooms.delete(roomId);
+    }
+  });
 
   const isInRoom = Array.from(storage.rooms.values()).some((room) =>
     room.players.some((p) => p.index === ws.playerIndex)
@@ -115,27 +123,6 @@ export function handleSinglePlay(
 
   storage.rooms.delete(roomId);
   broadcastRooms(wss);
-
-  const startGameResponse: WebSocketResponse = {
-    type: 'start_game',
-    data: JSON.stringify({
-      ships: game.players.find((p) => p.index === ws.playerIndex)!.ships,
-      currentPlayerIndex: ws.playerIndex,
-    } as StartGameResult),
-    id: parsedMessage.id,
-  };
-  ws.send(JSON.stringify(startGameResponse));
-  logger.log('start_game', { player: ws.playerIndex }, JSON.parse(startGameResponse.data));
-
-  const turnResponse: WebSocketResponse = {
-    type: 'turn',
-    data: JSON.stringify({
-      currentPlayer: ws.playerIndex,
-    } as TurnResult),
-    id: parsedMessage.id,
-  };
-  ws.send(JSON.stringify(turnResponse));
-  logger.log('turn redirect', { player: ws.playerIndex }, JSON.parse(turnResponse.data));
 }
 
 function generateBotShips(): Ship[] {
@@ -151,7 +138,11 @@ function generateBotShips(): Ship[] {
   for (const config of shipConfigs) {
     for (let i = 0; i < config.count; i++) {
       let placed = false;
-      while (!placed) {
+      let attempts = 0;
+      const maxAttempts = 100;
+
+      while (!placed && attempts < maxAttempts) {
+        attempts++;
         const direction = Math.random() > 0.5;
         const x = Math.floor(Math.random() * 10);
         const y = Math.floor(Math.random() * 10);
@@ -162,14 +153,34 @@ function generateBotShips(): Ship[] {
 
         let valid = true;
         const cells: string[] = [];
+
         for (let j = 0; j < config.length; j++) {
           const cellX = direction ? x : x + j;
           const cellY = direction ? y + j : y;
           const cellKey = `${cellX},${cellY}`;
+
           if (occupiedCells.has(cellKey)) {
             valid = false;
             break;
           }
+
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+              if (dx === 0 && dy === 0) continue;
+              const neighborX = cellX + dx;
+              const neighborY = cellY + dy;
+              if (neighborX >= 0 && neighborX < 10 && neighborY >= 0 && neighborY < 10) {
+                const neighborKey = `${neighborX},${neighborY}`;
+                if (occupiedCells.has(neighborKey)) {
+                  valid = false;
+                  break;
+                }
+              }
+            }
+            if (!valid) break;
+          }
+
+          if (!valid) break;
           cells.push(cellKey);
         }
 
@@ -184,7 +195,24 @@ function generateBotShips(): Ship[] {
           placed = true;
         }
       }
+
+      if (!placed) {
+        logger.log(
+          'generateBotShips_error',
+          { config, attempt: attempts, error: 'Failed to place ship' },
+          { status: 'error' }
+        );
+      }
     }
   }
+
+  if (ships.length !== 10) {
+    logger.log(
+      'generateBotShips_error',
+      { generatedShips: ships.length, expected: 10, ships },
+      { status: 'error' }
+    );
+  }
+
   return ships;
 }
