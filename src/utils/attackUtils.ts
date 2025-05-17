@@ -16,26 +16,29 @@ export function getShipCells(ship: Ship): { x: number; y: number }[] {
 export function getAroundCells(ship: Ship): { x: number; y: number }[] {
   const shipCells = getShipCells(ship);
   const aroundCells: { x: number; y: number }[] = [];
-  const rangeX = ship.direction ? 1 : ship.length;
-  const rangeY = ship.direction ? ship.length : 1;
-  const shipX = ship.position.x;
-  const shipY = ship.position.y;
+  const uniqueCells = new Set<string>();
 
-  for (let i = -1; i <= rangeX; i++) {
-    for (let j = -1; j <= rangeY; j++) {
-      const cellX = ship.direction ? shipX + i : shipX + j;
-      const cellY = ship.direction ? shipY + j : shipY + i;
-      if (
-        cellX >= 0 &&
-        cellX < 10 &&
-        cellY >= 0 &&
-        cellY < 10 &&
-        !shipCells.some((cell) => cell.x === cellX && cell.y === cellY)
-      ) {
-        aroundCells.push({ x: cellX, y: cellY });
+  shipCells.forEach((cell) => {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const newX = cell.x + dx;
+        const newY = cell.y + dy;
+        const cellKey = `${newX},${newY}`;
+        if (
+          newX >= 0 &&
+          newX < 10 &&
+          newY >= 0 &&
+          newY < 10 &&
+          !shipCells.some((shipCell) => shipCell.x === newX && shipCell.y === newY) &&
+          !uniqueCells.has(cellKey)
+        ) {
+          aroundCells.push({ x: newX, y: newY });
+          uniqueCells.add(cellKey);
+        }
       }
     }
-  }
+  });
+
   return aroundCells;
 }
 
@@ -147,6 +150,7 @@ export function processAttack(
     }
   }
 
+  // Логирование для отладки
   logger.log(
     'attack_debug',
     {
